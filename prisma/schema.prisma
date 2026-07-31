@@ -78,3 +78,13 @@ model Estimate {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+model Product {
+  id        Int      @id @default(autoincrement())
+  name      String
+  category  String   @default("기타")
+  desc      String?
+  imageUrl  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

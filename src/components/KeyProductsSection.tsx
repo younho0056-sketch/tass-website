@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { 
   Container, Stack, Paper, Title, Text, Badge, Group, ActionIcon, 
   Modal, Button, TextInput, Textarea, Select, SimpleGrid, ThemeIcon 
@@ -18,42 +18,42 @@ export type ProductItem = {
   imageUrl: string;
 };
 
-// 5 High quality industrial sample products
+// 5 High quality industrial sample products (with local static fallback assets)
 const INITIAL_PRODUCTS: ProductItem[] = [
   {
     id: 'prod-1',
     name: '스마트 고강도 안전 가드레일',
     category: '안전 가드레일',
     desc: '충격 흡수 댐퍼 및 실시간 휨 감지 IoT 센서가 내장된 산업 현장용 고강도 가드레일',
-    imageUrl: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=800&auto=format&fit=crop'
+    imageUrl: '/images/products/product-1.jpg'
   },
   {
     id: 'prod-2',
     name: '20/40ft 컨테이너 자동 스프레더',
     category: '스프레더 솔루션',
     desc: '항만 크레인 하역 작업 시 컨테이너 유격 자동 조절 및 유압 락킹 시스템',
-    imageUrl: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=800&auto=format&fit=crop'
+    imageUrl: '/images/products/product-2.jpg'
   },
   {
     id: 'prod-3',
     name: '산업용 ESS 에너지 저장 인프라',
     category: 'ESS & 친환경',
     desc: '탄소 중립 실현을 위한 대용량 배터리 열관리 및 스마트 BMS 연동 ESS 컨테이너',
-    imageUrl: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?q=80&w=800&auto=format&fit=crop'
+    imageUrl: '/images/products/product-3.jpg'
   },
   {
     id: 'prod-4',
     name: '항만 물류 무인 이송 AGV',
     category: '물류 자동화',
     desc: '터미널 내 컨테이너 고속 이송을 위한 라이다(LiDAR) 기반 자율주행 AGV',
-    imageUrl: 'https://images.unsplash.com/photo-1618042164219-62c820f10723?q=80&w=800&auto=format&fit=crop'
+    imageUrl: '/images/products/product-4.jpg'
   },
   {
     id: 'prod-5',
     name: '스마트 현장 통합 안전 모니터링 허브',
     category: '안전 센서 팩',
     desc: '위험 지역 무단 침입 감지 및 가스/열화상 카메라 연동 지능형 컨트롤러',
-    imageUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800&auto=format&fit=crop'
+    imageUrl: '/images/products/product-5.jpg'
   }
 ];
 
@@ -61,6 +61,7 @@ export default function KeyProductsSection() {
   const [products, setProducts] = useState<ProductItem[]>(INITIAL_PRODUCTS);
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // New Product Form State
   const [newName, setNewName] = useState('');
@@ -73,6 +74,31 @@ export default function KeyProductsSection() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch('/api/products');
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const mappedData: ProductItem[] = data.map((p: { id: number; name: string; category: string; desc: string | null; imageUrl: string }) => ({
+          id: String(p.id),
+          name: p.name,
+          category: p.category,
+          desc: p.desc || 'TASS 정품 스마트 산업 설비',
+          imageUrl: p.imageUrl
+        }));
+        setProducts([...mappedData, ...INITIAL_PRODUCTS]);
+      }
+    } catch (e) {
+      console.error('Fetch products error:', e);
+    }
+  };
+
+  // Load products from DB on component mount
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchProducts();
+  }, []);
 
   const handleScrollLeft = () => {
     if (scrollContainerRef.current) {
@@ -98,29 +124,82 @@ export default function KeyProductsSection() {
     }
   };
 
-  const handleAddProduct = (e: React.FormEvent) => {
+  const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    if (!newName.trim() || submitting) return;
+    setSubmitting(true);
 
-    // Use uploaded preview base64 data URL or default image fallback
-    const finalImageUrl = previewUrl || 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=800&auto=format&fit=crop';
+    try {
+      let finalImageUrl = previewUrl || '/images/products/product-1.jpg';
 
-    const newProd: ProductItem = {
-      id: `prod-${Date.now()}`,
-      name: newName.trim(),
-      category: newCategory || '기타',
-      desc: newDesc.trim() || 'TASS 정품 스마트 산업 설비',
-      imageUrl: finalImageUrl
-    };
+      // If a physical file was uploaded from desktop, send to /api/upload
+      if (file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+        const uploadData = await uploadRes.json();
+        if (uploadData.url) {
+          finalImageUrl = uploadData.url;
+        }
+      }
 
-    setProducts(prev => [newProd, ...prev]);
-    setNewName('');
-    setNewDesc('');
-    setFile(null);
-    setPreviewUrl('');
+      // Save new product into DB via /api/products
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newName.trim(),
+          category: newCategory || '기타',
+          desc: newDesc.trim() || 'TASS 정품 스마트 산업 설비',
+          imageUrl: finalImageUrl
+        })
+      });
+
+      if (res.ok) {
+        const created = await res.json();
+        const newProd: ProductItem = {
+          id: String(created.id),
+          name: created.name,
+          category: created.category,
+          desc: created.desc || 'TASS 정품 스마트 산업 설비',
+          imageUrl: created.imageUrl
+        };
+        setProducts(prev => [newProd, ...prev]);
+      } else {
+        // Local fallback if DB insert fails
+        const fallbackProd: ProductItem = {
+          id: `prod-${Date.now()}`,
+          name: newName.trim(),
+          category: newCategory || '기타',
+          desc: newDesc.trim() || 'TASS 정품 스마트 산업 설비',
+          imageUrl: finalImageUrl
+        };
+        setProducts(prev => [fallbackProd, ...prev]);
+      }
+
+      setNewName('');
+      setNewDesc('');
+      setFile(null);
+      setPreviewUrl('');
+    } catch (err) {
+      console.error('Add product error:', err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
+    // If ID is a DB integer ID, call DELETE API
+    if (!id.startsWith('prod-')) {
+      try {
+        await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      } catch (err) {
+        console.error('Delete product error:', err);
+      }
+    }
     setProducts(prev => prev.filter(p => p.id !== id));
   };
 
@@ -481,7 +560,7 @@ export default function KeyProductsSection() {
                   styles={{ input: { backgroundColor: '#0f172a', color: '#ffffff', borderColor: '#334155' } }}
                 />
 
-                <Button type="submit" color="blue" fullWidth leftSection={<IconCheck size={16} />}>
+                <Button type="submit" color="blue" fullWidth loading={submitting} leftSection={<IconCheck size={16} />}>
                   신규 제품 추가하기
                 </Button>
               </Stack>

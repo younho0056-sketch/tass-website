@@ -17,8 +17,29 @@ const geistMono = Geist_Mono({
 import ClientShell from "@/components/ClientShell";
 
 export const metadata: Metadata = {
-  title: "Partner Management & Blog Gen",
-  description: "Manage vendors, extract emails, and generate blogs",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://tass-website.vercel.app'),
+  title: "TASS (타스) - 스마트 산업 안전 가드레일 & 솔루션",
+  description: "사람을 위한, 사람이 먼저인, 사람을 향하는 스마트 산업 안전 기술 TASS입니다.",
+  openGraph: {
+    title: "TASS (타스) - 스마트 산업 안전 가드레일 & 솔루션",
+    description: "사람을 위한, 사람이 먼저인, 사람을 향하는 스마트 산업 안전 기술 TASS입니다.",
+    images: [
+      {
+        url: "/images/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "TASS 스마트 산업 안전 가드레일 & 솔루션",
+      },
+    ],
+    type: "website",
+    locale: "ko_KR",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TASS (타스) - 스마트 산업 안전 가드레일 & 솔루션",
+    description: "사람을 위한, 사람이 먼저인, 사람을 향하는 스마트 산업 안전 기술 TASS입니다.",
+    images: ["/images/og-image.png"],
+  },
 };
 
 const theme = createTheme({
@@ -39,6 +60,14 @@ export default function RootLayout({
     >
       <head>
         <ColorSchemeScript />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="TASS (타스) - 스마트 산업 안전 가드레일 & 솔루션" />
+        <meta property="og:description" content="사람을 위한, 사람이 먼저인, 사람을 향하는 스마트 산업 안전 기술 TASS입니다." />
+        <meta property="og:image" content="/images/og-image.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="TASS (타스) - 스마트 산업 안전 가드레일 & 솔루션" />
+        <meta name="twitter:description" content="사람을 위한, 사람이 먼저인, 사람을 향하는 스마트 산업 안전 기술 TASS입니다." />
+        <meta name="twitter:image" content="/images/og-image.png" />
       </head>
       <body className="min-h-full flex flex-col m-0 p-0">
         <MantineProvider theme={theme} defaultColorScheme="light">

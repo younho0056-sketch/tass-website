@@ -1,26 +1,287 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background-color: #0b1329 !important;
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: #0b1329 !important;
+  color: #111827;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* Crisp Clean Panel Card Utility - Enterprise Dashboard Aesthetic */
+.glass-panel, .glass-card {
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+  border-radius: 12px !important;
+  color: #111827 !important;
+}
+
+/* Subheader Banner Styling */
+.page-header-banner {
+  border-radius: 14px !important;
+}
+
+/* Modal Styling - Crisp Clean White */
+.mantine-Modal-content {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12) !important;
+  border-radius: 14px !important;
+  color: #111827 !important;
+}
+
+.mantine-Modal-header {
+  background: #ffffff !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  color: #111827 !important;
+}
+
+.mantine-Modal-title {
+  color: #111827 !important;
+  font-weight: 800 !important;
+  font-size: 1.15rem !important;
+}
+
+/* High Legibility Table Styling */
+.mantine-Table-table {
+  color: #111827 !important;
+}
+
+.mantine-Table-tr {
+  background-color: transparent !important;
+  color: #111827 !important;
+}
+
+.mantine-Table-tr:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.mantine-Table-th {
+  background-color: #f8fafc !important;
+  color: #334155 !important;
+  font-weight: 700 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+  white-space: nowrap !important;
+}
+
+.mantine-Table-td {
+  color: #111827 !important;
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+}
+
+/* Responsive Table Container */
+.table-responsive-container, .glass-panel {
+  max-width: 100%;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile Responsive Adjustments */
+@media (max-width: 768px) {
+  .page-header-banner {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 18px !important;
+  }
+  
+  .page-header-banner > div:last-child {
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    margin-top: 12px !important;
+  }
+
+  .page-header-banner button {
+    flex: 1 1 calc(50% - 6px) !important;
+    justify-content: center !important;
+  }
+}
+
+/* Form Inputs Styling */
+.mantine-Input-input, .mantine-Select-input, .mantine-MultiSelect-input, .mantine-Textarea-input {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #111827 !important;
+  font-weight: 500 !important;
+  border-radius: 6px !important;
+}
+
+.mantine-Input-input:focus, .mantine-Select-input:focus, .mantine-MultiSelect-input:focus, .mantine-Textarea-input:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important;
+}
+
+.mantine-Input-label, .mantine-Select-label, .mantine-MultiSelect-label, .mantine-Textarea-label {
+  color: #111827 !important;
+  font-weight: 600 !important;
+}
+
+/* App Header & Navbar Styling */
+.mantine-AppShell-header {
+  background-color: #0b1329 !important;
+  border-bottom: 1px solid #1e293b !important;
+}
+
+.mantine-AppShell-navbar {
+  background-color: #ffffff !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+.mantine-NavLink-label {
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+
+.mantine-NavLink-root[data-active] {
+  background-color: #eff6ff !important;
+}
+
+.mantine-NavLink-root[data-active] .mantine-NavLink-label {
+  color: #1d4ed8 !important;
+  font-weight: 700 !important;
+}
+
+/* @media print 전용 인쇄 최적화 */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+  
+  html, body {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 웹 UI 요소 완전히 숨기기 */
+  header, nav, aside, footer, .no-print, .print-hidden, .print\:hidden, .mantine-AppShell-header, .mantine-AppShell-navbar, .page-header-banner {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .mantine-AppShell-main,
+  .mantine-AppShell-root {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: 100% !important;
+    background: #ffffff !important;
+  }
+
+  /* 1페이지 중앙 정렬 컨테이너 (송장용) */
+  .print-container {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    height: 100vh !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page-break-inside: avoid !important;
+    page-break-before: avoid !important;
+  }
+
+  /* 송장 박스 크기 및 레이아웃 */
+  .shipping-label-box {
+    width: 170mm !important;
+    margin: auto !important;
+    box-shadow: none !important;
+    border: 2px solid #000000 !important;
+    background: #ffffff !important;
+    page-break-inside: avoid !important;
+    padding: 10mm !important;
+    border-radius: 4px;
+    box-sizing: border-box;
+  }
+
+  /* 공정 관리 현장 지시용 인쇄 표 양식 */
+  .orders-print-page {
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .orders-print-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: 2mm !important;
+    table-layout: fixed !important;
+  }
+
+  .orders-print-table th, .orders-print-table td {
+    border: 1px solid #000000 !important;
+    padding: 2mm 3mm !important;
+    font-size: 9.5pt !important;
+    text-align: center !important;
+    color: #000000 !important;
+    word-break: break-all !important;
+  }
+
+  .orders-print-table th {
+    background-color: #f1f5f9 !important;
+    font-weight: bold !important;
+  }
+
+  .step-highlight {
+    background-color: #e0f2fe !important;
+    color: #0369a1 !important;
+    font-weight: bold !important;
+    padding: 1px 4px !important;
+    border-radius: 3px !important;
+    border: 1px solid #0284c7 !important;
+  }
+
+  /* TASS 견적서 A4 세로(Portrait) 인쇄 서식 */
+  .tass-estimate-print-page {
+    width: 190mm !important;
+    min-height: 270mm !important;
+    margin: 0 auto !important;
+    padding: 8mm 10mm !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    position: relative !important;
+    font-family: 'Malgun Gothic', '맑은 고딕', sans-serif !important;
+  }
+
+  .tass-watermark {
+    position: absolute !important;
+    top: 40% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) rotate(-30deg) !important;
+    font-size: 110pt !important;
+    font-weight: 900 !important;
+    color: rgba(0, 0, 0, 0.04) !important;
+    pointer-events: none !important;
+    user-select: none !important;
+    z-index: 0 !important;
+    letter-spacing: 10px !important;
+  }
+
+  .tass-print-items-table th,
+  .tass-print-items-table td {
+    border: 1px solid #000000 !important;
+    padding: 2.5mm 2mm !important;
+    color: #000000 !important;
+  }
 }

@@ -147,30 +147,16 @@ export default function KeyProductsSection() {
 
       if (file) {
         try {
-          // Direct client-side Supabase Storage upload
+          // Pure client-side Supabase Storage upload
           finalImageUrl = await uploadProductImageToSupabase(file);
         } catch (clientErr: unknown) {
           const clientErrMsg = clientErr instanceof Error ? clientErr.message : String(clientErr);
-          console.warn('Client Supabase upload warning, attempting API fallback:', clientErrMsg);
-          
-          const formData = new FormData();
-          formData.append('file', file);
-          const uploadRes = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
-          });
-          const uploadData = await uploadRes.json();
-
-          if (!uploadRes.ok || !uploadData.url) {
-            alert(`스토리지 업로드 실패: ${clientErrMsg || uploadData.error || '스토리지 업로드 중 오류가 발생했습니다.'}`);
-            setSubmitting(false);
-            return;
-          }
-
-          finalImageUrl = uploadData.url;
+          alert(`Supabase 스토리지 업로드 실패: ${clientErrMsg}`);
+          setSubmitting(false);
+          return;
         }
-      } else if (!previewUrl) {
-        alert('제품 이미지를 선택하거나 업로드해 주세요.');
+      } else if (!previewUrl || previewUrl.startsWith('data:')) {
+        alert('제품 사진 파일(.jpg, .png 등)을 선택해 주세요.');
         setSubmitting(false);
         return;
       }

@@ -305,7 +305,7 @@ export default function OrdersPage() {
     <>
       {/* SCREEN VIEW (Hidden during print) */}
       <Stack gap="lg" className="print:hidden print-hidden no-print">
-        <PageHeaderBanner title="수주 및 공정 진척 관리" subtitle="TASS 생산 공정 현황 모니터링 및 현장 지시용 공정표 인쇄">
+        <PageHeaderBanner title="수주 및 공정 진척 관리" subtitle="TASS 생산 공정 현황 모니터링 및 현장 지시용 A4 가로 공정표 인쇄">
           <Button 
             variant="outline" 
             color="gray.0" 
@@ -314,7 +314,7 @@ export default function OrdersPage() {
             onClick={() => window.print()}
             style={{ color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.7)', fontWeight: 700 }}
           >
-            현장 지시용 공정표 A4 인쇄
+            현장 지시용 공정표 A4 가로 인쇄
           </Button>
           <Button color="blue.6" variant="filled" size="sm" leftSection={<IconPlus size={16} />} onClick={handleOpenCreate}>
             새 수주 등록

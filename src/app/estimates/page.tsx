@@ -413,7 +413,23 @@ export default function EstimatesPage() {
     <>
       {/* SCREEN VIEW (Hidden during print) */}
       <Stack gap="lg" className="print:hidden print-hidden no-print">
-        <PageHeaderBanner title="견적 관리 시스템" subtitle="TASS 견적서 작성, 수주 상태 추적 및 A4 인쇄 / 엑셀 다운로드">
+        <PageHeaderBanner title="견적 관리 시스템" subtitle="TASS 견적서 작성, 수주 상태 추적 및 A4 가로 인쇄 / 엑셀 다운로드">
+          <Button 
+            variant="outline" 
+            color="gray.0" 
+            size="sm"
+            leftSection={<IconPrinter size={16} />}
+            onClick={() => {
+              if (filteredEstimates.length > 0) {
+                handlePrintEstimate(printTargetEst || filteredEstimates[0]);
+              } else {
+                window.print();
+              }
+            }}
+            style={{ color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.7)', fontWeight: 700 }}
+          >
+            A4 가로 출력/인쇄
+          </Button>
           <Button color="blue.6" variant="filled" size="sm" leftSection={<IconPlus size={16} />} onClick={handleOpenCreate}>
             새 견적서 작성
           </Button>

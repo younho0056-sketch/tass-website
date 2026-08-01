@@ -16,8 +16,10 @@ export async function GET(request: Request) {
       orderBy: { createdAt: 'desc' }
     });
     return NextResponse.json(partners);
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch partners' }, { status: 500 });
+  } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : String(error);
+    console.error('Fetch partners error:', errMessage);
+    return NextResponse.json({ error: 'Failed to fetch partners', details: errMessage }, { status: 500 });
   }
 }
 
@@ -51,8 +53,10 @@ export async function POST(request: Request) {
       }
     });
     return NextResponse.json(partner, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to create partner' }, { status: 500 });
+  } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : String(error);
+    console.error('Create partner error:', errMessage);
+    return NextResponse.json({ error: 'Failed to create partner', details: errMessage }, { status: 500 });
   }
 }
 
@@ -68,7 +72,10 @@ export async function DELETE(request: Request) {
     });
 
     return NextResponse.json({ success: true, deletedCount: ids.length });
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to delete partners' }, { status: 500 });
+  } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : String(error);
+    console.error('Delete partners error:', errMessage);
+    return NextResponse.json({ error: 'Failed to delete partners', details: errMessage }, { status: 500 });
   }
 }
+

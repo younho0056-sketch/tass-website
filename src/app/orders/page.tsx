@@ -363,19 +363,19 @@ export default function OrdersPage() {
           <Table striped highlightOnHover withTableBorder verticalSpacing="md">
             <Table.Thead>
               <Table.Tr>
-                <Table.Th w={90}>상태</Table.Th>
-                <Table.Th w={150}>거래처명</Table.Th>
-                <Table.Th w={150}>품목/수량</Table.Th>
-                <Table.Th w={110}>발주일</Table.Th>
-                <Table.Th w={110}>납기일</Table.Th>
-                <Table.Th>공정 진척도 (라이브 스텝 체크)</Table.Th>
-                <Table.Th w={90}>작업</Table.Th>
+                <Table.Th w={75} style={{ whiteSpace: 'nowrap' }}>상태</Table.Th>
+                <Table.Th w={140}>거래처명</Table.Th>
+                <Table.Th w={130}>품목/수량</Table.Th>
+                <Table.Th w={110} style={{ whiteSpace: 'nowrap' }}>발주일</Table.Th>
+                <Table.Th w={110} style={{ whiteSpace: 'nowrap' }}>납기일</Table.Th>
+                <Table.Th style={{ minWidth: 340 }}>공정 진척도 (라이브 스텝 체크)</Table.Th>
+                <Table.Th w={90} style={{ whiteSpace: 'nowrap' }}>작업</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {filteredOrders.map(o => (
                 <Table.Tr key={o.id}>
-                  <Table.Td>
+                  <Table.Td style={{ whiteSpace: 'nowrap' }}>
                     <Badge 
                       color={o.status === '완료' ? 'green' : o.status === '납기임박' ? 'orange' : 'blue'} 
                       variant={o.status === '납기임박' ? 'filled' : 'light'}
@@ -400,11 +400,11 @@ export default function OrdersPage() {
                     <Text fw={600}>{o.itemName}</Text>
                     <Text size="xs" c="dimmed">{o.quantity}개</Text>
                   </Table.Td>
-                  <Table.Td>
-                    <Text size="sm">{o.orderDate || '-'}</Text>
+                  <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                    <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{o.orderDate || '-'}</Text>
                   </Table.Td>
-                  <Table.Td>
-                    <Text size="sm" fw={600} color={o.status === '납기임박' ? 'red' : 'dark'}>
+                  <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                    <Text size="sm" fw={600} style={{ whiteSpace: 'nowrap' }} color={o.status === '납기임박' ? 'red' : 'dark'}>
                       {o.dueDate || '-'}
                     </Text>
                   </Table.Td>
@@ -685,21 +685,21 @@ export default function OrdersPage() {
           <table className="orders-print-table">
             <thead>
               <tr>
-                <th style={{ width: '4%' }}>순번</th>
-                <th style={{ width: '7%' }}>상태</th>
-                <th style={{ width: '15%' }}>거래처명</th>
-                <th style={{ width: '17%' }}>품목/수량</th>
-                <th style={{ width: '10%' }}>발주일</th>
-                <th style={{ width: '10%' }}>납기일</th>
-                <th style={{ width: '7%' }}>진척율</th>
-                <th style={{ width: '30%' }}>공정 단계 현황</th>
+                <th style={{ width: '5%', whiteSpace: 'nowrap' }}>순번</th>
+                <th style={{ width: '7%', whiteSpace: 'nowrap' }}>상태</th>
+                <th style={{ width: '14%' }}>거래처명</th>
+                <th style={{ width: '15%' }}>품목/수량</th>
+                <th style={{ width: '11%', whiteSpace: 'nowrap' }}>발주일</th>
+                <th style={{ width: '11%', whiteSpace: 'nowrap' }}>납기일</th>
+                <th style={{ width: '6%', whiteSpace: 'nowrap' }}>진척율</th>
+                <th style={{ width: '31%' }}>공정 단계 현황</th>
               </tr>
             </thead>
             <tbody>
               {filteredOrders.map((o, idx) => (
                 <tr key={o.id}>
-                  <td>{idx + 1}</td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{idx + 1}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
                     <span style={{ 
                       fontWeight: 'bold', 
                       color: o.status === '완료' ? '#047857' : o.status === '납기임박' ? '#c2410c' : '#1d4ed8' 
@@ -709,12 +709,12 @@ export default function OrdersPage() {
                   </td>
                   <td><strong>{o.partnerName}</strong></td>
                   <td>{o.itemName} ({o.quantity}개)</td>
-                  <td>{o.orderDate || '-'}</td>
-                  <td>{o.dueDate || '-'}</td>
-                  <td><strong>{o.progressPercent}%</strong></td>
-                  <td style={{ fontSize: '9pt', textAlign: 'left', lineHeight: 1.4 }}>
+                  <td style={{ whiteSpace: 'nowrap' }}>{o.orderDate || '-'}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{o.dueDate || '-'}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}><strong>{o.progressPercent}%</strong></td>
+                  <td style={{ fontSize: '8.5pt', textAlign: 'left', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
                     {(o.steps || []).filter(s => s.active).map((s, i, arr) => (
-                      <span key={s.name}>
+                      <span key={s.name} style={{ display: 'inline-block', whiteSpace: 'nowrap' }}>
                         {s.status === '진행중' ? (
                           <span 
                             className="step-highlight" 
@@ -722,19 +722,20 @@ export default function OrdersPage() {
                               backgroundColor: '#e0f2fe', 
                               color: '#0369a1', 
                               fontWeight: 'bold', 
-                              padding: '1px 5px', 
+                              padding: '1px 4px', 
                               borderRadius: '3px', 
-                              border: '1px solid #0284c7' 
+                              border: '1px solid #0284c7',
+                              fontSize: '8.5pt'
                             }}
                           >
                             ▶ {s.name}
                           </span>
                         ) : (
-                          <span style={{ color: s.status === '완료' ? '#059669' : '#6b7280', fontWeight: s.status === '완료' ? 600 : 400 }}>
+                          <span style={{ color: s.status === '완료' ? '#059669' : '#6b7280', fontWeight: s.status === '완료' ? 600 : 400, fontSize: '8.5pt' }}>
                             {s.name}
                           </span>
                         )}
-                        {i < arr.length - 1 && <span style={{ color: '#9ca3af', margin: '0 4px' }}>➔</span>}
+                        {i < arr.length - 1 && <span style={{ color: '#9ca3af', margin: '0 2px' }}>➔</span>}
                       </span>
                     ))}
                   </td>

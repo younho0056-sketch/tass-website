@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Container, Stack, Paper, Title, Text, Badge, Group, ActionIcon, 
   Modal, Button, TextInput, Textarea, Select, SimpleGrid, ThemeIcon 
@@ -216,8 +216,15 @@ export default function KeyProductsSection() {
     }
   };
 
-  // Triplicate items array for seamless 100% infinite looping carousel display
-  const sliderItems = products.length > 0 ? [...products, ...products, ...products] : [];
+  // Ensure sliderItems repeats until there are at least 12 items so small datasets (2-3 items) never leave blank space
+  const sliderItems = useMemo(() => {
+    if (products.length === 0) return [];
+    let items: ProductItem[] = [...products];
+    while (items.length < 12) {
+      items = [...items, ...products];
+    }
+    return items;
+  }, [products]);
 
   return (
     <section 

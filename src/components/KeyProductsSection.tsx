@@ -9,7 +9,7 @@ import {
   IconChevronLeft, IconChevronRight, IconPlus, IconTrash, 
   IconZoomIn, IconSettings, IconCheck, IconUpload, IconX, IconPhoto 
 } from '@tabler/icons-react';
-
+import { uploadProductImageToSupabase } from '@/lib/supabase';
 export type ProductItem = {
   id: string;
   name: string;
@@ -146,21 +146,29 @@ export default function KeyProductsSection() {
       let finalImageUrl = previewUrl || '/images/products/product-1.jpg';
 
       if (file) {
-        const formData = new FormData();
-        formData.append('file', file);
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-        const uploadData = await uploadRes.json();
+        try {
+          // Direct client-side Supabase Storage upload
+          finalImageUrl = await uploadProductImageToSupabase(file);
+        } catch (clientErr: unknown) {
+          const clientErrMsg = clientErr instanceof Error ? clientErr.message : String(clientErr);
+          console.warn('Client Supabase upload warning, attempting API fallback:', clientErrMsg);
+          
+          const formData = new FormData();
+          formData.append('file', file);
+          const uploadRes = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+          });
+          const uploadData = await uploadRes.json();
 
-        if (!uploadRes.ok || !uploadData.url) {
-          alert(`이미지 업로드 실패: ${uploadData.error || '스토리지 업로드 오류'}`);
-          setSubmitting(false);
-          return;
+          if (!uploadRes.ok || !uploadData.url) {
+            alert(`스토리지 업로드 실패: ${clientErrMsg || uploadData.error || '스토리지 업로드 중 오류가 발생했습니다.'}`);
+            setSubmitting(false);
+            return;
+          }
+
+          finalImageUrl = uploadData.url;
         }
-
-        finalImageUrl = uploadData.url;
       } else if (!previewUrl) {
         alert('제품 이미지를 선택하거나 업로드해 주세요.');
         setSubmitting(false);

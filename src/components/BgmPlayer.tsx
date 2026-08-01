@@ -36,38 +36,51 @@ export default function BgmPlayer() {
   return (
     <>
       <audio ref={audioRef} src="/audio/bgm.mp3" loop preload="auto" />
-      <Tooltip label={isPlaying ? 'BGM 일시정지' : '웅장한 오케스트라 BGM 재생'} position="bottom" withArrow>
-        <Button
-          onClick={togglePlay}
-          variant={isPlaying ? 'gradient' : 'outline'}
-          gradient={{ from: 'blue', to: 'cyan' }}
-          size="xs"
-          radius="xl"
-          style={{
-            borderColor: isPlaying ? 'transparent' : 'rgba(255, 255, 255, 0.3)',
-            backgroundColor: isPlaying ? undefined : 'rgba(15, 23, 42, 0.6)',
-            backdropFilter: 'blur(8px)',
-            transition: 'all 0.3s ease',
-            color: '#ffffff',
-            boxShadow: isPlaying ? '0 0 14px rgba(37, 99, 235, 0.6)' : 'none',
-            height: '34px',
-            padding: '0 12px'
-          }}
-          leftSection={
-            isPlaying ? (
-              <Volume2 size={16} style={{ color: '#38bdf8' }} />
-            ) : (
-              <VolumeX size={16} style={{ color: '#94a3b8' }} />
-            )
-          }
-        >
-          <Group gap={6} align="center">
-            <Text fw={700} size="xs" style={{ letterSpacing: '0.5px' }}>
-              {isPlaying ? 'BGM ON' : 'BGM OFF'}
-            </Text>
-          </Group>
-        </Button>
-      </Tooltip>
+      
+      {/* 화면 우측 하단 플로팅 BGM 컨트롤 버튼 (모든 기기/화면 100% 노출 보장) */}
+      <div 
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 9999,
+        }}
+      >
+        <Tooltip label={isPlaying ? 'BGM 일시정지 (웅장한 오케스트라)' : 'BGM 켜기 (웅장한 오케스트라)'} position="left" withArrow>
+          <Button
+            onClick={togglePlay}
+            size="md"
+            radius="xl"
+            variant={isPlaying ? 'gradient' : 'filled'}
+            gradient={{ from: 'blue', to: 'cyan' }}
+            style={{
+              backgroundColor: isPlaying ? undefined : 'rgba(15, 23, 42, 0.90)',
+              border: isPlaying ? '1px solid rgba(56, 189, 248, 0.6)' : '1px solid rgba(255, 255, 255, 0.3)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              boxShadow: isPlaying ? '0 0 20px rgba(37, 99, 235, 0.7)' : '0 4px 15px rgba(0, 0, 0, 0.5)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              padding: '0 18px',
+              height: '44px',
+              cursor: 'pointer'
+            }}
+            leftSection={
+              isPlaying ? (
+                <Volume2 size={20} style={{ color: '#38bdf8' }} />
+              ) : (
+                <VolumeX size={20} style={{ color: '#94a3b8' }} />
+              )
+            }
+          >
+            <Group gap={6} align="center">
+              <Text fw={800} size="sm" style={{ color: '#ffffff', letterSpacing: '0.5px' }}>
+                {isPlaying ? '🎵 BGM ON' : '🔇 BGM 켜기'}
+              </Text>
+            </Group>
+          </Button>
+        </Tooltip>
+      </div>
     </>
   );
 }
+

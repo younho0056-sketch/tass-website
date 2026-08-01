@@ -77,7 +77,7 @@ export default function KeyProductsSection() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch('/api/products');
+      const res = await fetch('/api/products', { cache: 'no-store' });
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         const mappedData: ProductItem[] = data.map((p: { id: number; name: string; category: string; desc: string | null; imageUrl: string }) => ({

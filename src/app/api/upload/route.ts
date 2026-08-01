@@ -13,12 +13,16 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(bytes);
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.SUPABASE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json({ 
-        error: 'Supabase 스토리지 연결 환경변수(NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)가 Vercel 대시보드에 설정되지 않았습니다.' 
-      }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Supabase 스토리지 환경변수가 설정되지 않았습니다.' },
+        { status: 500 }
+      );
     }
 
     const fileExt = file.name.split('.').pop() || 'png';
@@ -29,27 +33,26 @@ export async function POST(request: Request) {
     const uploadRes = await fetch(uploadUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
+        Authorization: `Bearer ${supabaseKey}`,
         'Content-Type': file.type || 'image/png',
-        'x-upsert': 'true'
+        'x-upsert': 'true',
       },
-      body: buffer
+      body: buffer,
     });
 
-    if (uploadRes.ok) {
-      const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${fileName}`;
-      return NextResponse.json({ url: publicUrl, storageType: 'supabase' }, { status: 200 });
-    } else {
+    if (!uploadRes.ok) {
       const errText = await uploadRes.text();
-      console.error('Supabase storage upload error:', uploadRes.status, errText);
-      return NextResponse.json({ 
-        error: `Supabase Storage ('product-images' 버킷) 업로드 실패 (${uploadRes.status}): ${errText || 'Supabase 대시보드에서 product-images 공개 버킷이 생성되어 있는지 확인하세요.'}` 
-      }, { status: 500 });
+      console.error('Supabase Storage Upload Error:', errText);
+      return NextResponse.json(
+        { error: 'Supabase 스토리지 업로드 실패. 버킷 이름과 RLS 권한을 확인해주세요.' },
+        { status: 500 }
+      );
     }
-  } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : String(error);
-    console.error('File upload error:', errMessage);
-    return NextResponse.json({ error: `파일 업로드 중 오류 발생: ${errMessage}` }, { status: 500 });
+
+    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${fileName}`;
+    return NextResponse.json({ url: publicUrl, storageType: 'supabase' }, { status: 200 });
+  } catch (error) {
+    console.error('File upload error:', error);
+    return NextResponse.json({ error: '이미지 업로드 중 오류가 발생했습니다.' }, { status: 500 });
   }
 }
-

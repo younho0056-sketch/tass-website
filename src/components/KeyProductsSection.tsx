@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Container, Stack, Paper, Title, Text, Badge, Group, ActionIcon, 
-  Modal, Button, TextInput, Textarea, Select, SimpleGrid, ThemeIcon 
+  Modal, Button, TextInput, Textarea, Select, SimpleGrid, ThemeIcon, Loader, Skeleton 
 } from '@mantine/core';
 import { 
   IconChevronLeft, IconChevronRight, IconPlus, IconTrash, 
@@ -59,6 +59,7 @@ const INITIAL_PRODUCTS: ProductItem[] = [
 
 export default function KeyProductsSection() {
   const [products, setProducts] = useState<ProductItem[]>(INITIAL_PRODUCTS);
+  const [loading, setLoading] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -76,6 +77,7 @@ export default function KeyProductsSection() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const fetchProducts = async () => {
+    setLoading(true);
     try {
       const res = await fetch('/api/products', { cache: 'no-store' });
       const data = await res.json();
@@ -85,12 +87,14 @@ export default function KeyProductsSection() {
           name: p.name,
           category: p.category,
           desc: p.desc || 'TASS 정품 스마트 산업 설비',
-          imageUrl: p.imageUrl
+          imageUrl: p.imageUrl.startsWith('data:') ? '/images/products/product-1.jpg' : p.imageUrl
         }));
         setProducts([...mappedData, ...INITIAL_PRODUCTS]);
       }
     } catch (e) {
       console.error('Fetch products error:', e);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -327,18 +331,26 @@ export default function KeyProductsSection() {
           </Group>
 
           {/* Product Slider Carousel */}
-          <div 
-            ref={scrollContainerRef}
-            style={{
-              position: 'relative',
-              overflowX: 'auto',
-              scrollbarWidth: 'none',
-              msOverflowStyle: 'none',
-              WebkitOverflowScrolling: 'touch',
-              padding: '12px 0'
-            }}
-          >
-            <div className="product-marquee-track">
+          {loading ? (
+            <Group justify="center" align="center" style={{ minHeight: '240px', width: '100%' }}>
+              <Stack align="center" gap="xs">
+                <Loader color="blue" size="md" type="dots" />
+                <Text size="sm" c="gray.4" fw={600}>Supabase DB에서 제품 라인업 로딩 중...</Text>
+              </Stack>
+            </Group>
+          ) : (
+            <div 
+              ref={scrollContainerRef}
+              style={{
+                position: 'relative',
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+                WebkitOverflowScrolling: 'touch',
+                padding: '12px 0'
+              }}
+            >
+              <div className="product-marquee-track">
               {sliderItems.map((item, index) => (
                 <Paper
                   key={`${item.id}-${index}`}
@@ -410,6 +422,7 @@ export default function KeyProductsSection() {
               ))}
             </div>
           </div>
+          )}
         </Stack>
       </Container>
 

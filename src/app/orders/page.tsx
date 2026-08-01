@@ -86,7 +86,9 @@ export default function OrdersPage() {
   // Partner Detail Modal State
   const [partnerModalOpened, { open: openPartnerModal, close: closePartnerModal }] = useDisclosure(false);
   const [selectedPartnerDetail, setSelectedPartnerDetail] = useState<PartnerDetail | null>(null);
+  const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
   const [printInvoicePartner, setPrintInvoicePartner] = useState<PartnerDetail | null>(null);
+  const [printInvoiceOrder, setPrintInvoiceOrder] = useState<Order | null>(null);
 
   // Form State
   const [partnerName, setPartnerName] = useState('');
@@ -174,11 +176,11 @@ export default function OrdersPage() {
     open();
   };
 
-  const handleShowPartnerDetail = (pName: string) => {
+  const handleShowPartnerDetail = (pName: string, order?: Order) => {
     const partner = allPartners.find(p => p.name === pName);
+    setSelectedOrderForInvoice(order || null);
     if (partner) {
       setSelectedPartnerDetail(partner);
-      openPartnerModal();
     } else {
       setSelectedPartnerDetail({
         id: 0,
@@ -193,8 +195,8 @@ export default function OrdersPage() {
         address: null,
         memo: null
       });
-      openPartnerModal();
     }
+    openPartnerModal();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -290,8 +292,30 @@ export default function OrdersPage() {
     }
   };
 
-  const handlePrintPartnerInvoice = (partner: PartnerDetail) => {
+  const handlePrintPartnerInvoice = (partner: PartnerDetail, order?: Order | null) => {
     setPrintInvoicePartner(partner);
+    setPrintInvoiceOrder(order || null);
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
+  const handlePrintSingleOrderInvoice = (order: Order) => {
+    const partner = allPartners.find(p => p.name === order.partnerName) || {
+      id: 0,
+      name: order.partnerName,
+      type: '미등록',
+      manager: null,
+      email: null,
+      phone: null,
+      tel: null,
+      fax: null,
+      specialty: '',
+      address: null,
+      memo: null
+    };
+    setPrintInvoicePartner(partner);
+    setPrintInvoiceOrder(order);
     setTimeout(() => {
       window.print();
     }, 150);
@@ -442,7 +466,7 @@ export default function OrdersPage() {
                           fw={700} 
                           c="blue.7"
                           style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                          onClick={() => handleShowPartnerDetail(o.partnerName)}
+                          onClick={() => handleShowPartnerDetail(o.partnerName, o)}
                         >
                           {o.partnerName}
                         </Text>
@@ -520,20 +544,25 @@ export default function OrdersPage() {
                       </Group>
                     </Stack>
                   </Table.Td>
-                  <Table.Td>
-                    <Group gap={4} wrap="nowrap">
-                      <Tooltip label="수정">
-                        <ActionIcon color="dark" variant="subtle" size="sm" onClick={() => handleOpenEdit(o)}>
-                          <IconPencil size={17} />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label="삭제">
-                        <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleDelete(o.id)}>
-                          <IconTrash size={17} />
-                        </ActionIcon>
-                      </Tooltip>
-                    </Group>
-                  </Table.Td>
+                    <Table.Td>
+                      <Group gap={4} wrap="nowrap">
+                        <Tooltip label="수정">
+                          <ActionIcon color="dark" variant="subtle" size="sm" onClick={() => handleOpenEdit(o)}>
+                            <IconPencil size={17} />
+                          </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label="선택 품목 거래명세표/송장 인쇄">
+                          <ActionIcon color="indigo.6" variant="subtle" size="sm" onClick={() => handlePrintSingleOrderInvoice(o)}>
+                            <IconPrinter size={17} />
+                          </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label="삭제">
+                          <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleDelete(o.id)}>
+                            <IconTrash size={17} />
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
+                    </Table.Td>
                 </Table.Tr>
               );
             })}
@@ -699,6 +728,15 @@ export default function OrdersPage() {
                   </div>
                 )}
 
+                {selectedOrderForInvoice && (
+                  <Group gap="xs" p="xs" style={{ backgroundColor: 'rgba(59, 130, 246, 0.08)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                    <Badge color="blue" size="sm">선택 수주 품목 지정됨</Badge>
+                    <Text size="xs" fw={700} c="blue.9">
+                      {selectedOrderForInvoice.itemName} ({selectedOrderForInvoice.quantity}개 / 납기: {selectedOrderForInvoice.dueDate || '-'})
+                    </Text>
+                  </Group>
+                )}
+
                 <Group gap="xs" mt="md" wrap="wrap" grow>
                   {selectedPartnerDetail.phone && (
                     <Button 
@@ -737,9 +775,9 @@ export default function OrdersPage() {
                     leftSection={<IconPrinter size={15} />} 
                     color="indigo.6" 
                     size="xs"
-                    onClick={() => handlePrintPartnerInvoice(selectedPartnerDetail)}
+                    onClick={() => handlePrintPartnerInvoice(selectedPartnerDetail, selectedOrderForInvoice)}
                   >
-                    송장/거래명세표 출력
+                    {selectedOrderForInvoice ? '선택 품목 명세표 출력' : '전체 품목 명세표 출력'}
                   </Button>
                 </Group>
               </Stack>
@@ -781,7 +819,9 @@ export default function OrdersPage() {
                 </tbody>
               </table>
 
-              <div style={{ fontWeight: 'bold', marginBottom: '2mm', fontSize: '10pt' }}>[수주 및 출고 품목 내역]</div>
+              <div style={{ fontWeight: 'bold', marginBottom: '2mm', fontSize: '10pt' }}>
+                [수주 및 출고 품목 내역{printInvoiceOrder ? ` (선택 품목: ${printInvoiceOrder.itemName})` : ''}]
+              </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '4mm' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f1f5f9' }}>
@@ -794,7 +834,7 @@ export default function OrdersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.filter(o => o.partnerName === printInvoicePartner.name).map((item, idx) => (
+                  {(printInvoiceOrder ? [printInvoiceOrder] : orders.filter(o => o.partnerName === printInvoicePartner.name)).map((item, idx) => (
                     <tr key={item.id}>
                       <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{idx + 1}</td>
                       <td style={{ border: '1px solid #000', padding: '2mm', fontWeight: 'bold' }}>{item.itemName}</td>
@@ -804,7 +844,7 @@ export default function OrdersPage() {
                       <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.status}</td>
                     </tr>
                   ))}
-                  {orders.filter(o => o.partnerName === printInvoicePartner.name).length === 0 && (
+                  {(printInvoiceOrder ? [printInvoiceOrder] : orders.filter(o => o.partnerName === printInvoicePartner.name)).length === 0 && (
                     <tr>
                       <td colSpan={6} style={{ border: '1px solid #000', padding: '3mm', textAlign: 'center', color: '#666' }}>
                         해당 거래처의 수주 내역이 존재하지 않습니다.

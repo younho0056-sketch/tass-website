@@ -7,6 +7,7 @@ import Link from 'next/link';
 import CompanyIntroduction from '@/components/CompanyIntroduction';
 import KeyProductsSection from '@/components/KeyProductsSection';
 import CustomerSupportSection from '@/components/CustomerSupportSection';
+import BgmPlayer from '@/components/BgmPlayer';
 
 export default function LandingPage() {
   // Outer Scroll Snap Container Ref
@@ -99,6 +100,8 @@ export default function LandingPage() {
             고객지원
           </Text>
           
+          <BgmPlayer />
+
           <Link href="/partners" style={{ textDecoration: 'none' }}>
             <Button color="blue.6" variant="filled" radius="xl" size="sm" rightSection={<IconArrowRight size={15} />}>
               관리자 시스템 접속

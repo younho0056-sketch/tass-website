@@ -5,6 +5,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet } from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import BgmPlayer from '@/components/BgmPlayer';
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const [opened, { toggle }] = useDisclosure();
@@ -58,9 +59,12 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             </Link>
           </Group>
 
-          <Text size="xs" style={{ color: '#94a3b8', fontWeight: 500 }} visibleFrom="sm">
-            Technology About Safety Systems
-          </Text>
+          <Group gap="md">
+            <BgmPlayer />
+            <Text size="xs" style={{ color: '#94a3b8', fontWeight: 500 }} visibleFrom="sm">
+              Technology About Safety Systems
+            </Text>
+          </Group>
         </Group>
       </AppShell.Header>
 

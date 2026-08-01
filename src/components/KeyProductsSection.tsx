@@ -204,6 +204,14 @@ export default function KeyProductsSection() {
 
   const handleDeleteProduct = async (id: string) => {
     if (!confirm('정말로 이 제품을 삭제하시겠습니까?')) return;
+
+    // If item is a dummy/local ID, remove directly from local state
+    if (id.startsWith('prod-') || isNaN(Number(id))) {
+      setProducts(prev => prev.filter(p => p.id !== id));
+      alert('제품이 성공적으로 삭제되었습니다.');
+      return;
+    }
+
     try {
       const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
       if (!res.ok) {

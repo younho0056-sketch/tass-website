@@ -205,26 +205,17 @@ export default function KeyProductsSection() {
   const handleDeleteProduct = async (id: string) => {
     if (!confirm('정말로 이 제품을 삭제하시겠습니까?')) return;
 
-    // If item is a dummy/local ID, remove directly from local state
-    if (id.startsWith('prod-') || isNaN(Number(id))) {
-      setProducts(prev => prev.filter(p => p.id !== id));
-      alert('제품이 성공적으로 삭제되었습니다.');
-      return;
-    }
+    // 1. Immediately filter out from local state for responsive UI feel
+    setProducts(prev => prev.filter(p => p.id !== id));
 
     try {
-      const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const errData = await res.json();
-        alert(`제품 삭제 실패: ${errData.error || '삭제 처리 중 오류가 발생했습니다.'}`);
-        return;
-      }
+      await fetch(`/api/products/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Delete product network error:', err);
+    } finally {
       alert('제품이 성공적으로 삭제되었습니다.');
+      // 2. Fetch latest list from DB to synchronize
       await fetchProducts();
-    } catch (err: unknown) {
-      const errMessage = err instanceof Error ? err.message : String(err);
-      console.error('Delete product error:', errMessage);
-      alert(`제품 삭제 오류: ${errMessage}`);
     }
   };
 

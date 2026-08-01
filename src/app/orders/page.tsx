@@ -50,6 +50,19 @@ type PartnerDetail = {
   memo: string | null;
 };
 
+function getDaysRemaining(dueDateStr: string | null | undefined): number | null {
+  if (!dueDateStr || !dueDateStr.trim()) return null;
+  const target = new Date(dueDateStr.trim());
+  if (isNaN(target.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+
+  const diffTime = target.getTime() - today.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
 type PartnerOption = {
   value: string;
   label: string;
@@ -60,17 +73,11 @@ const DEFAULT_STEPS = ['설계', '절단', '가공', '용접', '도장', '조립
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [allPartners, setAllPartners] = useState<PartnerDetail[]>([]);
-  const [metrics, setMetrics] = useState({
-    totalCount: 0,
-    inProgressCount: 0,
-    nearingDueCount: 0,
-    completedCount: 0
-  });
 
   // Search & Filter
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
-  const [tabFilter, setTabFilter] = useState<'ALL' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
+  const [tabFilter, setTabFilter] = useState<'ALL' | 'IN_PROGRESS' | 'URGENT' | 'COMPLETED'>('ALL');
 
   // Order Create/Edit Modal State
   const [opened, { open, close }] = useDisclosure(false);
@@ -79,6 +86,7 @@ export default function OrdersPage() {
   // Partner Detail Modal State
   const [partnerModalOpened, { open: openPartnerModal, close: closePartnerModal }] = useDisclosure(false);
   const [selectedPartnerDetail, setSelectedPartnerDetail] = useState<PartnerDetail | null>(null);
+  const [printInvoicePartner, setPrintInvoicePartner] = useState<PartnerDetail | null>(null);
 
   // Form State
   const [partnerName, setPartnerName] = useState('');
@@ -109,7 +117,6 @@ export default function OrdersPage() {
       const data = await res.json();
       if (data.orders) {
         setOrders(data.orders);
-        setMetrics(data.metrics || { totalCount: 0, inProgressCount: 0, nearingDueCount: 0, completedCount: 0 });
       }
     } catch (e) {
       console.error(e);
@@ -283,19 +290,51 @@ export default function OrdersPage() {
     }
   };
 
+  const handlePrintPartnerInvoice = (partner: PartnerDetail) => {
+    setPrintInvoicePartner(partner);
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
+  const metrics = useMemo(() => {
+    const totalCount = orders.length;
+    const completedCount = orders.filter(o => o.status === '완료').length;
+    const inProgressCount = orders.filter(o => o.status !== '완료').length;
+    const urgentCount = orders.filter(o => {
+      if (o.status === '완료') return false;
+      const days = getDaysRemaining(o.dueDate);
+      return days !== null && days <= 2;
+    }).length;
+
+    return { totalCount, completedCount, inProgressCount, urgentCount };
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
       const matchSearch = o.partnerName.includes(search) || o.itemName.includes(search);
-      const matchStatusSelect = filterStatus ? o.status === filterStatus : true;
-
+      
       let matchTab = true;
       if (tabFilter === 'IN_PROGRESS') {
         matchTab = o.status !== '완료';
+      } else if (tabFilter === 'URGENT') {
+        const days = getDaysRemaining(o.dueDate);
+        matchTab = o.status !== '완료' && days !== null && days <= 2;
       } else if (tabFilter === 'COMPLETED') {
         matchTab = o.status === '완료';
       }
 
-      return matchSearch && matchStatusSelect && matchTab;
+      let matchStatusSelect = true;
+      if (filterStatus) {
+        if (filterStatus === '납기임박') {
+          const days = getDaysRemaining(o.dueDate);
+          matchStatusSelect = o.status !== '완료' && days !== null && days <= 2;
+        } else {
+          matchStatusSelect = o.status === filterStatus;
+        }
+      }
+
+      return matchSearch && matchTab && matchStatusSelect;
     });
   }, [orders, search, filterStatus, tabFilter]);
 
@@ -311,7 +350,10 @@ export default function OrdersPage() {
             color="gray.0" 
             size="sm"
             leftSection={<IconPrinter size={16} />}
-            onClick={() => window.print()}
+            onClick={() => {
+              setPrintInvoicePartner(null);
+              window.print();
+            }}
             style={{ color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.7)', fontWeight: 700 }}
           >
             현장 지시용 공정표 A4 가로 인쇄
@@ -325,12 +367,13 @@ export default function OrdersPage() {
         <SegmentedControl
           value={tabFilter}
           onChange={(val: string) => {
-            setTabFilter(val as 'ALL' | 'IN_PROGRESS' | 'COMPLETED');
+            setTabFilter(val as 'ALL' | 'IN_PROGRESS' | 'URGENT' | 'COMPLETED');
             if (val !== 'ALL') setFilterStatus(null);
           }}
           data={[
             { label: `전체 보기 (${metrics.totalCount}건)`, value: 'ALL' },
             { label: `진행 중인 공정 (${metrics.inProgressCount}건)`, value: 'IN_PROGRESS' },
+            { label: `🚨 납기 임박 (${metrics.urgentCount}건)`, value: 'URGENT' },
             { label: `완료된 공정 (${metrics.completedCount}건)`, value: 'COMPLETED' },
           ]}
           size="md"
@@ -373,41 +416,67 @@ export default function OrdersPage() {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {filteredOrders.map(o => (
-                <Table.Tr key={o.id}>
-                  <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                    <Badge 
-                      color={o.status === '완료' ? 'green' : o.status === '납기임박' ? 'orange' : 'blue'} 
-                      variant={o.status === '납기임박' ? 'filled' : 'light'}
-                      size="md"
-                    >
-                      {o.status}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Tooltip label="거래처 상세 정보 보기">
-                      <Text 
-                        fw={700} 
-                        c="blue.7"
-                        style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                        onClick={() => handleShowPartnerDetail(o.partnerName)}
+              {filteredOrders.map(o => {
+                const daysLeft = getDaysRemaining(o.dueDate);
+                const isUrgent = o.status !== '완료' && daysLeft !== null && daysLeft <= 2;
+
+                return (
+                  <Table.Tr 
+                    key={o.id}
+                    style={{
+                      backgroundColor: isUrgent ? 'rgba(254, 226, 226, 0.40)' : undefined
+                    }}
+                  >
+                    <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                      <Badge 
+                        color={o.status === '완료' ? 'green' : isUrgent ? 'red' : 'blue'} 
+                        variant={isUrgent ? 'filled' : 'light'}
+                        size="md"
                       >
-                        {o.partnerName}
-                      </Text>
-                    </Tooltip>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text fw={600}>{o.itemName}</Text>
-                    <Text size="xs" c="dimmed">{o.quantity}개</Text>
-                  </Table.Td>
-                  <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                    <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{o.orderDate || '-'}</Text>
-                  </Table.Td>
-                  <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                    <Text size="sm" fw={600} style={{ whiteSpace: 'nowrap' }} color={o.status === '납기임박' ? 'red' : 'dark'}>
-                      {o.dueDate || '-'}
-                    </Text>
-                  </Table.Td>
+                        {isUrgent ? '납기임박' : o.status}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Tooltip label="거래처 상세 정보 보기">
+                        <Text 
+                          fw={700} 
+                          c="blue.7"
+                          style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                          onClick={() => handleShowPartnerDetail(o.partnerName)}
+                        >
+                          {o.partnerName}
+                        </Text>
+                      </Tooltip>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text fw={600}>{o.itemName}</Text>
+                      <Text size="xs" c="dimmed">{o.quantity}개</Text>
+                    </Table.Td>
+                    <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                      <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{o.orderDate || '-'}</Text>
+                    </Table.Td>
+                    <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                      <Group gap={4} wrap="nowrap" align="center">
+                        <Text 
+                          size="sm" 
+                          fw={isUrgent ? 900 : 600} 
+                          color={isUrgent ? 'red.7' : 'dark'}
+                          style={{ whiteSpace: 'nowrap' }}
+                        >
+                          {o.dueDate || '-'}
+                        </Text>
+                        {isUrgent && (
+                          <Badge 
+                            color="red" 
+                            variant="filled" 
+                            size="xs"
+                            style={{ fontWeight: 800 }}
+                          >
+                            {daysLeft! < 0 ? `D+${Math.abs(daysLeft!)}` : daysLeft === 0 ? 'D-Day' : `D-${daysLeft}`}
+                          </Badge>
+                        )}
+                      </Group>
+                    </Table.Td>
                   <Table.Td>
                     <Stack gap="xs">
                       {/* 프로그레스 바 */}
@@ -466,7 +535,8 @@ export default function OrdersPage() {
                     </Group>
                   </Table.Td>
                 </Table.Tr>
-              ))}
+              );
+            })}
 
               {filteredOrders.length === 0 && (
                 <Table.Tr>
@@ -629,40 +699,48 @@ export default function OrdersPage() {
                   </div>
                 )}
 
-                <Group gap="sm" mt="md">
+                <Group gap="xs" mt="md" wrap="wrap" grow>
                   {selectedPartnerDetail.phone && (
                     <Button 
                       component="a" 
                       href={`tel:${selectedPartnerDetail.phone}`} 
-                      leftSection={<IconPhone size={16} />} 
+                      leftSection={<IconPhone size={15} />} 
                       color="blue" 
                       size="xs"
                     >
-                      휴대폰 전화 연결
+                      휴대폰
                     </Button>
                   )}
                   {selectedPartnerDetail.tel && (
                     <Button 
                       component="a" 
                       href={`tel:${selectedPartnerDetail.tel}`} 
-                      leftSection={<IconPhone size={16} />} 
+                      leftSection={<IconPhone size={15} />} 
                       color="teal" 
                       size="xs"
                     >
-                      회사전화 연결
+                      회사전화
                     </Button>
                   )}
                   {selectedPartnerDetail.email && (
                     <Button 
                       component="a" 
                       href={`mailto:${selectedPartnerDetail.email}`} 
-                      leftSection={<IconMail size={16} />} 
+                      leftSection={<IconMail size={15} />} 
                       color="violet" 
                       size="xs"
                     >
-                      이메일 발송
+                      이메일
                     </Button>
                   )}
+                  <Button 
+                    leftSection={<IconPrinter size={15} />} 
+                    color="indigo.6" 
+                    size="xs"
+                    onClick={() => handlePrintPartnerInvoice(selectedPartnerDetail)}
+                  >
+                    송장/거래명세표 출력
+                  </Button>
                 </Group>
               </Stack>
             </Card>
@@ -670,17 +748,88 @@ export default function OrdersPage() {
         </Modal>
       </Stack>
 
-      {/* PRINT VIEW: 현장 지시용 공정 현황 A4 인쇄 표 양식 (Landscape 1Page Fit) */}
+      {/* PRINT VIEW: A4 인쇄 표 양식 (공정표 or 거래처 송장) */}
       <div className="hidden print:block">
-        <div className="orders-print-page">
-          <div style={{ textAlign: 'center', marginBottom: '2mm' }}>
-            <h1 style={{ fontSize: '16pt', fontWeight: 800, margin: 0, padding: 0, display: 'inline-block' }}>
-              TASS 현장 지시용 공정 현황표
-            </h1>
-            <span style={{ fontSize: '9pt', color: '#444', marginLeft: '12px' }}>
-              (출력일자: {todayStr} | Technology About Safety Systems)
-            </span>
+        {printInvoicePartner ? (
+          <div className="print-container">
+            <div className="shipping-label-box" style={{ width: '170mm', margin: 'auto', border: '2px solid #000', padding: '8mm', backgroundColor: '#fff' }}>
+              <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '4mm', marginBottom: '4mm' }}>
+                <h2 style={{ fontSize: '18pt', fontWeight: 900, margin: 0, letterSpacing: '2px' }}>TASS 거래명세표 및 운송장 (INVOICE)</h2>
+                <span style={{ fontSize: '9pt', color: '#444' }}>발행일자: {todayStr} | 문서번호: TASS-INV-{Date.now().toString().slice(-6)}</span>
+              </div>
+              
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4mm', fontSize: '9.5pt' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ width: '50%', verticalAlign: 'top', border: '1px solid #000', padding: '3mm' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '11pt', borderBottom: '1px solid #000', paddingBottom: '1mm', marginBottom: '2mm' }}>[수하인 (공급받는 자)]</div>
+                      <div><strong>상호명:</strong> {printInvoicePartner.name} ({printInvoicePartner.type})</div>
+                      <div><strong>담당자:</strong> {printInvoicePartner.manager || '-'}</div>
+                      <div><strong>연락처:</strong> {printInvoicePartner.phone || printInvoicePartner.tel || '-'}</div>
+                      <div><strong>이메일:</strong> {printInvoicePartner.email || '-'}</div>
+                      <div><strong>배송지:</strong> {printInvoicePartner.address || '주소 미등록'}</div>
+                    </td>
+                    <td style={{ width: '50%', verticalAlign: 'top', border: '1px solid #000', padding: '3mm' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '11pt', borderBottom: '1px solid #000', paddingBottom: '1mm', marginBottom: '2mm' }}>[공급자 (발송인)]</div>
+                      <div><strong>상호명:</strong> 타스 (TASS)</div>
+                      <div><strong>대표자:</strong> 최윤호 (인)</div>
+                      <div><strong>연락처:</strong> 010-2621-0056</div>
+                      <div><strong>등록번호:</strong> 606-12-34567</div>
+                      <div><strong>발송지:</strong> 부산광역시 사상구 감전천로 137</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div style={{ fontWeight: 'bold', marginBottom: '2mm', fontSize: '10pt' }}>[수주 및 출고 품목 내역]</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '4mm' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f1f5f9' }}>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>순번</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>품목명</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>수량</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>발주일</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>납기일</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>상태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.filter(o => o.partnerName === printInvoicePartner.name).map((item, idx) => (
+                    <tr key={item.id}>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{idx + 1}</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', fontWeight: 'bold' }}>{item.itemName}</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.quantity}개</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.orderDate || '-'}</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.dueDate || '-'}</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.status}</td>
+                    </tr>
+                  ))}
+                  {orders.filter(o => o.partnerName === printInvoicePartner.name).length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ border: '1px solid #000', padding: '3mm', textAlign: 'center', color: '#666' }}>
+                        해당 거래처의 수주 내역이 존재하지 않습니다.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              <div style={{ border: '1px solid #000', padding: '3mm', fontSize: '8.5pt', lineHeight: 1.5 }}>
+                <div><strong>[특기사항 및 거래조건]</strong></div>
+                <div>{printInvoicePartner.memo || '인수 확인 후 서명 또는 도인을 날인하여 주시기 바랍니다.'}</div>
+              </div>
+            </div>
           </div>
+        ) : (
+          <div className="orders-print-page">
+            <div style={{ textAlign: 'center', marginBottom: '2mm' }}>
+              <h1 style={{ fontSize: '16pt', fontWeight: 800, margin: 0, padding: 0, display: 'inline-block' }}>
+                TASS 현장 지시용 공정 현황표
+              </h1>
+              <span style={{ fontSize: '9pt', color: '#444', marginLeft: '12px' }}>
+                (출력일자: {todayStr} | Technology About Safety Systems)
+              </span>
+            </div>
 
           <table className="orders-print-table">
             <thead>
@@ -751,6 +900,7 @@ export default function OrdersPage() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </>
   );

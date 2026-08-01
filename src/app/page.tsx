@@ -56,21 +56,26 @@ export default function LandingPage() {
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)'
       }}>
-        <Group gap="xs" style={{ cursor: 'pointer' }} onClick={() => scrollToSection(heroSectionRef)}>
-          <div style={{
-            backgroundColor: '#2563eb',
-            color: '#ffffff',
-            padding: '4px 10px',
-            borderRadius: '6px',
-            fontWeight: 900,
-            fontSize: '16px',
-            letterSpacing: '1px'
-          }}>
-            TASS
-          </div>
-          <Text fw={900} size="xl" style={{ color: 'white', letterSpacing: '2px', fontSize: '24px' }}>
-            타스 (TASS)
-          </Text>
+        {/* Left Side: Logo + BGM Player */}
+        <Group gap="md" align="center">
+          <Group gap="xs" style={{ cursor: 'pointer' }} onClick={() => scrollToSection(heroSectionRef)}>
+            <div style={{
+              backgroundColor: '#2563eb',
+              color: '#ffffff',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              fontWeight: 900,
+              fontSize: '16px',
+              letterSpacing: '1px'
+            }}>
+              TASS
+            </div>
+            <Text fw={900} size="xl" style={{ color: 'white', letterSpacing: '2px', fontSize: '24px' }}>
+              타스 (TASS)
+            </Text>
+          </Group>
+
+          <BgmPlayer />
         </Group>
 
         {/* GNB Navigation Links: [회사소개 / 주요파트너사] -> [주요제품] -> [고객지원] */}
@@ -100,8 +105,6 @@ export default function LandingPage() {
             고객지원
           </Text>
           
-          <BgmPlayer />
-
           <Link href="/partners" style={{ textDecoration: 'none' }}>
             <Button color="blue.6" variant="filled" radius="xl" size="sm" rightSection={<IconArrowRight size={15} />}>
               관리자 시스템 접속

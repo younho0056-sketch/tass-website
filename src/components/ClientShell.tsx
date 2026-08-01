@@ -34,7 +34,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         }}
       >
         <Group h="100%" px="md" justify="space-between">
-          <Group gap="sm">
+          <Group gap="md" align="center">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" color="#ffffff" />
             <Link href="/" style={{ textDecoration: 'none' }}>
               <Group gap="xs" style={{ cursor: 'pointer' }}>
@@ -57,14 +57,13 @@ export default function ClientShell({ children }: { children: React.ReactNode })
                 </Title>
               </Group>
             </Link>
+
+            <BgmPlayer />
           </Group>
 
-          <Group gap="md">
-            <BgmPlayer />
-            <Text size="xs" style={{ color: '#94a3b8', fontWeight: 500 }} visibleFrom="sm">
-              Technology About Safety Systems
-            </Text>
-          </Group>
+          <Text size="xs" style={{ color: '#94a3b8', fontWeight: 500 }} visibleFrom="sm">
+            Technology About Safety Systems
+          </Text>
         </Group>
       </AppShell.Header>
 

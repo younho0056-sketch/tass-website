@@ -102,13 +102,22 @@ export default function KeyProductsSection() {
 
   const handleScrollLeft = () => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ left: -300, behavior: 'smooth' });
+      const el = scrollContainerRef.current;
+      if (el.scrollLeft <= 15) {
+        el.scrollLeft = el.scrollWidth / 3;
+      }
+      el.scrollBy({ left: -310, behavior: 'smooth' });
     }
   };
 
   const handleScrollRight = () => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({ left: 300, behavior: 'smooth' });
+      const el = scrollContainerRef.current;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (el.scrollLeft >= maxScroll - 15) {
+        el.scrollLeft = el.scrollWidth / 3;
+      }
+      el.scrollBy({ left: 310, behavior: 'smooth' });
     }
   };
 
@@ -132,7 +141,6 @@ export default function KeyProductsSection() {
     try {
       let finalImageUrl = previewUrl || '/images/products/product-1.jpg';
 
-      // If a physical file was uploaded from desktop, send to /api/upload
       if (file) {
         const formData = new FormData();
         formData.append('file', file);
@@ -141,12 +149,20 @@ export default function KeyProductsSection() {
           body: formData
         });
         const uploadData = await uploadRes.json();
-        if (uploadData.url) {
-          finalImageUrl = uploadData.url;
+
+        if (!uploadRes.ok || !uploadData.url) {
+          alert(`이미지 업로드 실패: ${uploadData.error || '스토리지 업로드 오류'}`);
+          setSubmitting(false);
+          return;
         }
+
+        finalImageUrl = uploadData.url;
+      } else if (!previewUrl) {
+        alert('제품 이미지를 선택하거나 업로드해 주세요.');
+        setSubmitting(false);
+        return;
       }
 
-      // Save new product into DB via /api/products
       const res = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -158,53 +174,50 @@ export default function KeyProductsSection() {
         })
       });
 
-      if (res.ok) {
-        const created = await res.json();
-        const newProd: ProductItem = {
-          id: String(created.id),
-          name: created.name,
-          category: created.category,
-          desc: created.desc || 'TASS 정품 스마트 산업 설비',
-          imageUrl: created.imageUrl
-        };
-        setProducts(prev => [newProd, ...prev]);
-      } else {
-        // Local fallback if DB insert fails
-        const fallbackProd: ProductItem = {
-          id: `prod-${Date.now()}`,
-          name: newName.trim(),
-          category: newCategory || '기타',
-          desc: newDesc.trim() || 'TASS 정품 스마트 산업 설비',
-          imageUrl: finalImageUrl
-        };
-        setProducts(prev => [fallbackProd, ...prev]);
+      const resData = await res.json();
+
+      if (!res.ok) {
+        alert(`제품 DB 등록 실패: ${resData.error || resData.details || '서버 저장 오류'}`);
+        setSubmitting(false);
+        return;
       }
+
+      alert(`'${resData.name}' 제품이 DB 및 스토리지에 성공적으로 등록되었습니다.`);
+      await fetchProducts();
 
       setNewName('');
       setNewDesc('');
       setFile(null);
       setPreviewUrl('');
-    } catch (err) {
-      console.error('Add product error:', err);
+    } catch (err: unknown) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      console.error('Add product error:', errMessage);
+      alert(`제품 등록 중 오류가 발생했습니다: ${errMessage}`);
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDeleteProduct = async (id: string) => {
-    // If ID is a DB integer ID, call DELETE API
-    if (!id.startsWith('prod-')) {
-      try {
-        await fetch(`/api/products/${id}`, { method: 'DELETE' });
-      } catch (err) {
-        console.error('Delete product error:', err);
+    if (!confirm('정말로 이 제품을 삭제하시겠습니까?')) return;
+    try {
+      const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const errData = await res.json();
+        alert(`제품 삭제 실패: ${errData.error || '삭제 처리 중 오류가 발생했습니다.'}`);
+        return;
       }
+      alert('제품이 성공적으로 삭제되었습니다.');
+      await fetchProducts();
+    } catch (err: unknown) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      console.error('Delete product error:', errMessage);
+      alert(`제품 삭제 오류: ${errMessage}`);
     }
-    setProducts(prev => prev.filter(p => p.id !== id));
   };
 
-  // Duplicate items array for smooth continuous carousel display
-  const sliderItems = products.length > 0 ? [...products, ...products] : [];
+  // Triplicate items array for seamless 100% infinite looping carousel display
+  const sliderItems = products.length > 0 ? [...products, ...products, ...products] : [];
 
   return (
     <section 

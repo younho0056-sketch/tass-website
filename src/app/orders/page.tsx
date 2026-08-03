@@ -10,8 +10,9 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { 
   IconPlus, IconPencil, IconTrash, IconSearch, 
-  IconPhone, IconMail, IconPrinter
+  IconPhone, IconMail, IconPrinter, IconDownload
 } from '@tabler/icons-react';
+import * as XLSX from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
 
 type ProcessStep = {
@@ -70,8 +71,77 @@ type PartnerOption = {
 
 const DEFAULT_STEPS = ['설계', '절단', '가공', '용접', '도장', '조립/납품'];
 
+const INITIAL_MOCK_ORDERS: Order[] = [
+  {
+    id: 101,
+    partnerName: '(주)삼우금속공업',
+    partnerId: 1,
+    itemName: '스마트 안전 제어함체 A-Type',
+    quantity: 15,
+    orderDate: '2026-08-01',
+    dueDate: '2026-08-07',
+    status: '진행중',
+    processSteps: '',
+    steps: [
+      { name: '설계', status: '완료', active: true },
+      { name: '절단', status: '완료', active: true },
+      { name: '가공', status: '진행중', active: true },
+      { name: '용접', status: '대기', active: true },
+      { name: '도장', status: '대기', active: true },
+      { name: '조립/납품', status: '대기', active: true }
+    ],
+    progressPercent: 33,
+    memo: '가공 라인 2번 시공 진행 확인 요망',
+    createdAt: '2026-08-01'
+  },
+  {
+    id: 102,
+    partnerName: '태양엔지니어링',
+    partnerId: 2,
+    itemName: '고효율 LED Smart 가로등 프레임',
+    quantity: 30,
+    orderDate: '2026-07-28',
+    dueDate: '2026-08-05',
+    status: '납기임박',
+    processSteps: '',
+    steps: [
+      { name: '설계', status: '완료', active: true },
+      { name: '절단', status: '완료', active: true },
+      { name: '가공', status: '완료', active: true },
+      { name: '용접', status: '완료', active: true },
+      { name: '도장', status: '진행중', active: true },
+      { name: '조립/납품', status: '대기', active: true }
+    ],
+    progressPercent: 67,
+    memo: 'D-1 긴급 도장 출고 대상',
+    createdAt: '2026-07-28'
+  },
+  {
+    id: 103,
+    partnerName: '경남정밀(주)',
+    partnerId: 3,
+    itemName: '산업용 ESS 모듈 안전 감지센서 케이스',
+    quantity: 50,
+    orderDate: '2026-07-20',
+    dueDate: '2026-08-02',
+    status: '완료',
+    processSteps: '',
+    steps: [
+      { name: '설계', status: '완료', active: true },
+      { name: '절단', status: '완료', active: true },
+      { name: '가공', status: '완료', active: true },
+      { name: '용접', status: '완료', active: true },
+      { name: '도장', status: '완료', active: true },
+      { name: '조립/납품', status: '완료', active: true }
+    ],
+    progressPercent: 100,
+    memo: '납품 완료 (검수필)',
+    createdAt: '2026-07-20'
+  }
+];
+
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(INITIAL_MOCK_ORDERS);
   const [allPartners, setAllPartners] = useState<PartnerDetail[]>([]);
 
   // Search & Filter
@@ -117,11 +187,11 @@ export default function OrdersPage() {
     try {
       const res = await fetch('/api/orders');
       const data = await res.json();
-      if (data.orders) {
+      if (data.orders && data.orders.length > 0) {
         setOrders(data.orders);
       }
     } catch (e) {
-      console.error(e);
+      console.error('API fetch orders error, using fallback mock data:', e);
     }
   }, []);
 
@@ -363,6 +433,50 @@ export default function OrdersPage() {
   }, [orders, search, filterStatus, tabFilter]);
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const docId = useMemo(() => Date.now().toString().slice(-6), []);
+
+  const handleExportExcel = () => {
+    const exportData = filteredOrders.map(o => {
+      const activeSteps = (o.steps || []).filter(s => s.active);
+      const inProgressStep = activeSteps.find(s => s.status === '진행중');
+      const currentStage = inProgressStep 
+        ? `${inProgressStep.name} 진행중`
+        : o.status === '완료' 
+          ? '전 공정 완료' 
+          : '대기 중';
+
+      return {
+        '상태': o.status,
+        '거래처명': o.partnerName,
+        '품목명': o.itemName,
+        '수량': o.quantity,
+        '발주일': o.orderDate || '-',
+        '납기일': o.dueDate || '-',
+        '진척도(%)': `${o.progressPercent}%`,
+        '현재 공정 단계': currentStage,
+        '비고': o.memo || '-'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    worksheet['!cols'] = [
+      { wch: 10 }, // 상태
+      { wch: 20 }, // 거래처명
+      { wch: 25 }, // 품목명
+      { wch: 8 },  // 수량
+      { wch: 12 }, // 발주일
+      { wch: 12 }, // 납기일
+      { wch: 12 }, // 진척도(%)
+      { wch: 22 }, // 현재 공정 단계
+      { wch: 30 }, // 비고
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '공정 현황');
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(workbook, `TASS_공정현황_${dateStr}.xlsx`);
+  };
 
   return (
     <>
@@ -381,6 +495,16 @@ export default function OrdersPage() {
             style={{ color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.7)', fontWeight: 700 }}
           >
             현장 지시용 공정표 A4 가로 인쇄
+          </Button>
+          <Button 
+            variant="filled" 
+            color="teal.6" 
+            size="sm"
+            leftSection={<IconDownload size={16} />}
+            onClick={handleExportExcel}
+            style={{ fontWeight: 700 }}
+          >
+            📊 공정 현황 엑셀 다운로드
           </Button>
           <Button color="blue.6" variant="filled" size="sm" leftSection={<IconPlus size={16} />} onClick={handleOpenCreate}>
             새 수주 등록
@@ -793,7 +917,7 @@ export default function OrdersPage() {
             <div className="shipping-label-box" style={{ width: '170mm', margin: 'auto', border: '2px solid #000', padding: '8mm', backgroundColor: '#fff' }}>
               <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '4mm', marginBottom: '4mm' }}>
                 <h2 style={{ fontSize: '18pt', fontWeight: 900, margin: 0, letterSpacing: '2px' }}>TASS 거래명세표 및 운송장 (INVOICE)</h2>
-                <span style={{ fontSize: '9pt', color: '#444' }}>발행일자: {todayStr} | 문서번호: TASS-INV-{Date.now().toString().slice(-6)}</span>
+                <span style={{ fontSize: '9pt', color: '#444' }}>발행일자: {todayStr} | 문서번호: TASS-INV-{docId}</span>
               </div>
               
               <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4mm', fontSize: '9.5pt' }}>

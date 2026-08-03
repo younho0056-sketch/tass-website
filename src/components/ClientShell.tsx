@@ -2,10 +2,11 @@
 
 import { AppShell, Burger, Group, NavLink, Title, Text, Box } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet } from '@tabler/icons-react';
+import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet, IconBuildingBank } from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import BgmPlayer from '@/components/BgmPlayer';
+import PWAInstallButton from '@/components/PWAInstallButton';
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const [opened, { toggle }] = useDisclosure();
@@ -14,10 +15,6 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   const handleNavClick = () => {
     if (opened) toggle();
   };
-
-  if (pathname === '/') {
-    return <>{children}</>;
-  }
 
   return (
     <AppShell
@@ -61,9 +58,12 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             <BgmPlayer />
           </Group>
 
-          <Text size="xs" style={{ color: '#94a3b8', fontWeight: 500 }} visibleFrom="sm">
-            Technology About Safety Systems
-          </Text>
+          <Group gap="md" align="center">
+            <PWAInstallButton />
+            <Text size="xs" style={{ color: '#94a3b8', fontWeight: 500 }} visibleFrom="sm">
+              Technology About Safety Systems
+            </Text>
+          </Group>
         </Group>
       </AppShell.Header>
 
@@ -96,6 +96,15 @@ export default function ClientShell({ children }: { children: React.ReactNode })
           label="공정 관리"
           leftSection={<IconListCheck size="1.1rem" stroke={1.5} />}
           active={pathname === '/orders'}
+          onClick={handleNavClick}
+          style={{ borderRadius: '8px', marginBottom: '4px' }}
+        />
+        <NavLink
+          component={Link}
+          href="/support-projects"
+          label="🏛️ 나라 지원사업 공고"
+          leftSection={<IconBuildingBank size="1.1rem" stroke={1.5} />}
+          active={pathname === '/support-projects'}
           onClick={handleNavClick}
           style={{ borderRadius: '8px', marginBottom: '4px' }}
         />

@@ -15,11 +15,18 @@ const geistMono = Geist_Mono({
 });
 
 import ClientShell from "@/components/ClientShell";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://tass-website.vercel.app'),
-  title: "TASS (타스) - 스마트 산업 안전 솔루션 전문 기업",
-  description: "사람을 위한, 사람이 먼저인, 사람을 향하는 스마트 산업 안전 기술 전문 기업 주식회사 TASS입니다.",
+  title: "TASS 스마트 현장 및 수주 관리 시스템",
+  description: "TASS 현장 지시용 공정 현황 모니터링 및 수주 관리 시스템",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "TASS",
+  },
   openGraph: {
     title: "TASS (타스) - 스마트 산업 안전 솔루션 전문 기업",
     description: "사람을 위한, 사람이 먼저인, 사람을 향하는 스마트 산업 안전 기술 전문 기업 주식회사 TASS입니다.",
@@ -60,6 +67,11 @@ export default function RootLayout({
     >
       <head>
         <ColorSchemeScript />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#0f172a" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="TASS" />
         <meta property="og:type" content="website" />
         <meta property="og:title" content="TASS (타스) - 스마트 산업 안전 솔루션 전문 기업" />
         <meta property="og:description" content="사람을 위한, 사람이 먼저인, 사람을 향하는 스마트 산업 안전 기술 전문 기업 주식회사 TASS입니다." />
@@ -70,6 +82,7 @@ export default function RootLayout({
         <meta name="twitter:image" content="/images/og-image.png" />
       </head>
       <body className="min-h-full flex flex-col m-0 p-0">
+        <ServiceWorkerRegister />
         <MantineProvider theme={theme} defaultColorScheme="light">
           <ClientShell>
             {children}

@@ -23,9 +23,16 @@ export const metadata: Metadata = {
   description: "TASS 현장 지시용 공정 현황 모니터링 및 수주 관리 시스템",
   manifest: "/manifest.json",
   icons: {
-    icon: '/icons/icon.png',
+    icon: [
+      { url: '/icons/icon.png' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
     shortcut: '/icons/icon.png',
-    apple: '/icons/icon.png',
+    apple: [
+      { url: '/icons/icon-512.png' },
+      { url: '/icons/icon-192.png', sizes: '192x192' },
+    ],
   },
   appleWebApp: {
     capable: true,
@@ -72,8 +79,10 @@ export default function RootLayout({
     >
       <head>
         <ColorSchemeScript />
-        <link rel="icon" href="/icons/icon.png" />
-        <link rel="apple-touch-icon" href="/icons/icon.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+        <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
+        <link rel="apple-touch-icon" href="/icons/icon-512.png" />
         <link rel="shortcut icon" href="/icons/icon.png" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0f172a" />

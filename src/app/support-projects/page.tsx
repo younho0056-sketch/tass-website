@@ -198,12 +198,12 @@ export default function SupportProjectsPage() {
         subtitle="부산/경남 TP, K-Startup, 기업마당, 소상공인진흥공단, IRiS 지원사업 실시간 모니터링 및 엑셀 다운로드"
       >
         <Button 
-          variant="filled" 
-          color="teal.6" 
+          variant="outline" 
+          color="gray.0" 
           size="sm"
           leftSection={<IconDownload size={16} />}
           onClick={handleExportExcel}
-          style={{ fontWeight: 700 }}
+          style={{ color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.7)', fontWeight: 700 }}
         >
           📊 지원공고 엑셀 다운로드
         </Button>

@@ -497,12 +497,12 @@ export default function OrdersPage() {
             현장 지시용 공정표 A4 가로 인쇄
           </Button>
           <Button 
-            variant="filled" 
-            color="teal.6" 
+            variant="outline" 
+            color="gray.0" 
             size="sm"
             leftSection={<IconDownload size={16} />}
             onClick={handleExportExcel}
-            style={{ fontWeight: 700 }}
+            style={{ color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.7)', fontWeight: 700 }}
           >
             📊 공정 현황 엑셀 다운로드
           </Button>

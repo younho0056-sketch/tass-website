@@ -16,6 +16,10 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     if (opened) toggle();
   };
 
+  if (pathname === '/') {
+    return <>{children}</>;
+  }
+
   return (
     <AppShell
       header={{ height: 60 }}

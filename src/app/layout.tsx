@@ -22,6 +22,11 @@ export const metadata: Metadata = {
   title: "TASS 스마트 현장 및 수주 관리 시스템",
   description: "TASS 현장 지시용 공정 현황 모니터링 및 수주 관리 시스템",
   manifest: "/manifest.json",
+  icons: {
+    icon: '/icons/icon.png',
+    shortcut: '/icons/icon.png',
+    apple: '/icons/icon.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -67,6 +72,9 @@ export default function RootLayout({
     >
       <head>
         <ColorSchemeScript />
+        <link rel="icon" href="/icons/icon.png" />
+        <link rel="apple-touch-icon" href="/icons/icon.png" />
+        <link rel="shortcut icon" href="/icons/icon.png" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0f172a" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

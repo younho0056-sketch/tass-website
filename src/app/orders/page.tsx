@@ -140,14 +140,45 @@ const INITIAL_MOCK_ORDERS: Order[] = [
   }
 ];
 
+type SortField = 'partnerName' | 'orderDate' | 'dueDate' | 'progressPercent';
+type SortOrder = 'asc' | 'desc';
+
+function getCurrentProcessStage(o: Order): string {
+  if (o.status === '완료') return '완료';
+  const activeSteps = (o.steps || []).filter(s => s.active);
+  const inProgressStep = activeSteps.find(s => s.status === '진행중');
+  if (inProgressStep) return inProgressStep.name;
+  const waitingStep = activeSteps.find(s => s.status === '대기');
+  if (waitingStep) return waitingStep.name;
+  return '대기';
+}
+
+const DETAIL_FILTER_OPTIONS = [
+  { group: '기본 상태 필터', items: [
+    { value: '진행중', label: '진행중' },
+    { value: '납기임박', label: '🚨 납기임박' },
+    { value: '완료', label: '완료' },
+  ]},
+  { group: '공정 단계별 묶어보기', items: [
+    { value: '설계중', label: '📐 설계중' },
+    { value: '절단중', label: '✂️ 절단중' },
+    { value: '가공중', label: '⚙️ 가공중' },
+    { value: '용접중', label: '🔥 용접중' },
+    { value: '도장중', label: '🎨 도장중' },
+    { value: '조립/납품중', label: '📦 조립/납품중' },
+  ]}
+];
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>(INITIAL_MOCK_ORDERS);
   const [allPartners, setAllPartners] = useState<PartnerDetail[]>([]);
 
-  // Search & Filter
+  // Search, Filter & Sort State
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [tabFilter, setTabFilter] = useState<'ALL' | 'IN_PROGRESS' | 'URGENT' | 'COMPLETED'>('ALL');
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
 
   // Order Create/Edit Modal State
   const [opened, { open, close }] = useDisclosure(false);
@@ -171,6 +202,26 @@ export default function OrdersPage() {
 
   // Client hydration state
   const [mounted, setMounted] = useState(false);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'progressPercent' ? 'desc' : 'asc');
+    }
+  };
+
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <Text component="span" c="gray.4" size="xs" fw={700} style={{ marginLeft: 4 }}>↕</Text>;
+    }
+    return (
+      <Text component="span" c="blue.6" fw={900} size="xs" style={{ marginLeft: 4 }}>
+        {sortOrder === 'asc' ? '▲' : '▼'}
+      </Text>
+    );
+  };
 
   const selectPartnerData = useMemo(() => {
     const options = allPartners.map(p => ({
@@ -405,7 +456,7 @@ export default function OrdersPage() {
   }, [orders]);
 
   const filteredOrders = useMemo(() => {
-    return orders.filter(o => {
+    const filtered = orders.filter(o => {
       const matchSearch = o.partnerName.includes(search) || o.itemName.includes(search);
       
       let matchTab = true;
@@ -420,17 +471,44 @@ export default function OrdersPage() {
 
       let matchStatusSelect = true;
       if (filterStatus) {
-        if (filterStatus === '납기임박') {
+        if (filterStatus === '진행중') {
+          matchStatusSelect = o.status !== '완료';
+        } else if (filterStatus === '납기임박') {
           const days = getDaysRemaining(o.dueDate);
           matchStatusSelect = o.status !== '완료' && days !== null && days <= 2;
+        } else if (filterStatus === '완료') {
+          matchStatusSelect = o.status === '완료';
         } else {
-          matchStatusSelect = o.status === filterStatus;
+          const cleanFilter = filterStatus.replace(/중$/, '');
+          const currentStage = getCurrentProcessStage(o);
+          matchStatusSelect = currentStage === cleanFilter || currentStage === filterStatus;
         }
       }
 
       return matchSearch && matchTab && matchStatusSelect;
     });
-  }, [orders, search, filterStatus, tabFilter]);
+
+    if (!sortField) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      let result = 0;
+      if (sortField === 'partnerName') {
+        result = (a.partnerName || '').localeCompare(b.partnerName || '', 'ko');
+      } else if (sortField === 'orderDate') {
+        const timeA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
+        const timeB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
+        result = timeA - timeB;
+      } else if (sortField === 'dueDate') {
+        const timeA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+        const timeB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+        result = timeA - timeB;
+      } else if (sortField === 'progressPercent') {
+        result = (a.progressPercent || 0) - (b.progressPercent || 0);
+      }
+
+      return sortOrder === 'asc' ? result : -result;
+    });
+  }, [orders, search, filterStatus, tabFilter, sortField, sortOrder]);
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   const docId = useMemo(() => Date.now().toString().slice(-6), []);
@@ -542,7 +620,7 @@ export default function OrdersPage() {
           <Select
             label="상세 상태 필터"
             placeholder="전체"
-            data={['진행중', '납기임박', '완료']}
+            data={DETAIL_FILTER_OPTIONS}
             value={filterStatus}
             onChange={setFilterStatus}
             clearable
@@ -555,11 +633,46 @@ export default function OrdersPage() {
             <Table.Thead>
               <Table.Tr>
                 <Table.Th w={75} style={{ whiteSpace: 'nowrap' }}>상태</Table.Th>
-                <Table.Th w={140}>거래처명</Table.Th>
+                <Table.Th 
+                  w={140}
+                  onClick={() => handleSort('partnerName')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                >
+                  <Group gap={4} wrap="nowrap" align="center">
+                    <Text fw={700} size="sm">거래처명</Text>
+                    {renderSortIcon('partnerName')}
+                  </Group>
+                </Table.Th>
                 <Table.Th w={130}>품목/수량</Table.Th>
-                <Table.Th w={110} style={{ whiteSpace: 'nowrap' }}>발주일</Table.Th>
-                <Table.Th w={110} style={{ whiteSpace: 'nowrap' }}>납기일</Table.Th>
-                <Table.Th style={{ minWidth: 340 }}>공정 진척도 (라이브 스텝 체크)</Table.Th>
+                <Table.Th 
+                  w={110} 
+                  style={{ whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => handleSort('orderDate')}
+                >
+                  <Group gap={4} wrap="nowrap" align="center">
+                    <Text fw={700} size="sm">발주일</Text>
+                    {renderSortIcon('orderDate')}
+                  </Group>
+                </Table.Th>
+                <Table.Th 
+                  w={110} 
+                  style={{ whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => handleSort('dueDate')}
+                >
+                  <Group gap={4} wrap="nowrap" align="center">
+                    <Text fw={700} size="sm">납기일</Text>
+                    {renderSortIcon('dueDate')}
+                  </Group>
+                </Table.Th>
+                <Table.Th 
+                  style={{ minWidth: 340, cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => handleSort('progressPercent')}
+                >
+                  <Group gap={4} wrap="nowrap" align="center">
+                    <Text fw={700} size="sm">공정 진척도 (라이브 스텝 체크)</Text>
+                    {renderSortIcon('progressPercent')}
+                  </Group>
+                </Table.Th>
                 <Table.Th w={90} style={{ whiteSpace: 'nowrap' }}>작업</Table.Th>
               </Table.Tr>
             </Table.Thead>

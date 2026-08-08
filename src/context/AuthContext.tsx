@@ -53,6 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setRole(null);
+    setTargetUrl(null);
     sessionStorage.removeItem(AUTH_STORAGE_KEY);
   };
 

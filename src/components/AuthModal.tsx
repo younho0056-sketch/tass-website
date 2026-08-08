@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, PasswordInput, Button, Stack, Text, Group, Alert, Paper, Badge } from '@mantine/core';
 import { IconLock, IconAlertCircle, IconKey, IconEye, IconShieldCheck } from '@tabler/icons-react';
 import { useAuth } from '@/context/AuthContext';
@@ -11,6 +11,13 @@ export default function AuthModal() {
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthModalOpen) {
+      setPin('');
+      setError(null);
+    }
+  }, [isAuthModalOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +75,7 @@ export default function AuthModal() {
       }}
       size="md"
     >
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} autoComplete="off">
         <Stack gap="md" pt="xs">
           <Text size="sm" c="dimmed">
             TASS 관리자 시스템 및 업무 기능에 접근하기 위해 비밀번호(PIN)를 입력해 주세요.
@@ -100,6 +107,8 @@ export default function AuthModal() {
             autoFocus
             size="md"
             maxLength={6}
+            autoComplete="new-password"
+            name="tass_pin_security"
           />
 
           <Group justify="flex-end" mt="sm">

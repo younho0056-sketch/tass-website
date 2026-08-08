@@ -37,6 +37,7 @@ export default function AuthModal() {
     setPin('');
     setError(null);
     closeAuthModal();
+    router.push('/');
   };
 
   return (
@@ -76,11 +77,11 @@ export default function AuthModal() {
           <Paper p="sm" radius="md" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
             <Text size="xs" fw={700} c="gray.7" mb={6}>💡 권한 안내</Text>
             <Group gap="xs" mb={4}>
-              <Badge color="teal" size="sm" variant="filled">직원 PIN: 1234</Badge>
+              <Badge color="teal" size="sm" variant="filled">직원 권한</Badge>
               <Text size="xs" c="gray.6">조회, 검색, A4/송장 출력, 엑셀 내보내기 가능</Text>
             </Group>
             <Group gap="xs">
-              <Badge color="blue" size="sm" variant="filled">관리자 PIN: 0056</Badge>
+              <Badge color="blue" size="sm" variant="filled">관리자 권한</Badge>
               <Text size="xs" c="gray.6">등록, 수정, 삭제, AI 원고 작성 등 전권 가능</Text>
             </Group>
           </Paper>

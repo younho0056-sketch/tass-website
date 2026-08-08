@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsAuthModalOpen(false);
       return { success: true, role: 'staff' as UserRole };
     } else {
-      return { success: false, error: '비밀번호가 일치하지 않습니다. (직원: 1234 / 관리자: 0056)' };
+      return { success: false, error: '비밀번호가 일치하지 않습니다.' };
     }
   };
 

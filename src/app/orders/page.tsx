@@ -5,12 +5,13 @@ import {
   Button, Stack, Group, Text, Badge, TextInput, 
   Modal, Select, Table, ActionIcon, Tooltip, Progress,
   NumberInput, SimpleGrid, Textarea, Checkbox,
-  SegmentedControl, Card
+  SegmentedControl, Card, Paper, Title
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { 
   IconPlus, IconPencil, IconTrash, IconSearch, 
-  IconPhone, IconMail, IconPrinter, IconDownload
+  IconPhone, IconMail, IconPrinter, IconDownload,
+  IconCalendar, IconChevronLeft, IconChevronRight, IconListCheck
 } from '@tabler/icons-react';
 import * as XLSX from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
@@ -180,6 +181,40 @@ export default function OrdersPage() {
   const [tabFilter, setTabFilter] = useState<'ALL' | 'IN_PROGRESS' | 'URGENT' | 'COMPLETED'>('ALL');
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+
+  // View mode & Calendar State
+  const [viewMode, setViewMode] = useState<'TABLE' | 'CALENDAR'>('TABLE');
+  const [calendarDate, setCalendarDate] = useState<Date>(new Date(2026, 7, 1));
+
+  const prevMonth = () => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  const nextMonth = () => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  const todayMonth = () => setCalendarDate(new Date());
+
+  const calendarDays = useMemo(() => {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+
+    const cells: { dateStr: string | null; dayNum: number | null; isCurrentMonth: boolean; dayOfWeek: number }[] = [];
+
+    for (let i = 0; i < firstDay; i++) {
+      cells.push({ dateStr: null, dayNum: null, isCurrentMonth: false, dayOfWeek: i });
+    }
+
+    for (let d = 1; d <= totalDays; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dayOfWeek = (firstDay + d - 1) % 7;
+      cells.push({ dateStr, dayNum: d, isCurrentMonth: true, dayOfWeek });
+    }
+
+    while (cells.length % 7 !== 0) {
+      cells.push({ dateStr: null, dayNum: null, isCurrentMonth: false, dayOfWeek: cells.length % 7 });
+    }
+
+    return cells;
+  }, [calendarDate]);
 
   // Order Create/Edit Modal State
   const [opened, { open, close }] = useDisclosure(false);
@@ -535,6 +570,16 @@ export default function OrdersPage() {
     });
   }, [orders, search, filterStatus, tabFilter, sortField, sortOrder]);
 
+  const getOrdersForDate = useCallback((dateStr: string | null) => {
+    if (!dateStr) return [];
+    return filteredOrders.filter(o => {
+      const isOrderDate = o.orderDate === dateStr;
+      const isDueDate = o.dueDate === dateStr;
+      const isInBetween = Boolean(o.orderDate && o.dueDate && o.orderDate <= dateStr && dateStr <= o.dueDate);
+      return isOrderDate || isDueDate || isInBetween;
+    });
+  }, [filteredOrders]);
+
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   const docId = useMemo(() => Date.now().toString().slice(-6), []);
 
@@ -652,193 +697,398 @@ export default function OrdersPage() {
           />
         </SimpleGrid>
 
-        {/* 공정 진척도 관리 테이블 */}
-        <div className="glass-panel table-responsive-container" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <Table striped highlightOnHover withTableBorder verticalSpacing="md">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th w={75} style={{ whiteSpace: 'nowrap' }}>상태</Table.Th>
-                <Table.Th 
-                  w={140}
-                  onClick={() => handleSort('partnerName')}
-                  style={{ cursor: 'pointer', userSelect: 'none' }}
-                >
-                  <Group gap={4} wrap="nowrap" align="center">
-                    <Text fw={700} size="sm">거래처명</Text>
-                    {renderSortIcon('partnerName')}
-                  </Group>
-                </Table.Th>
-                <Table.Th w={130}>품목/수량</Table.Th>
-                <Table.Th 
-                  w={110} 
-                  style={{ whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
-                  onClick={() => handleSort('orderDate')}
-                >
-                  <Group gap={4} wrap="nowrap" align="center">
-                    <Text fw={700} size="sm">발주일</Text>
-                    {renderSortIcon('orderDate')}
-                  </Group>
-                </Table.Th>
-                <Table.Th 
-                  w={110} 
-                  style={{ whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
-                  onClick={() => handleSort('dueDate')}
-                >
-                  <Group gap={4} wrap="nowrap" align="center">
-                    <Text fw={700} size="sm">납기일</Text>
-                    {renderSortIcon('dueDate')}
-                  </Group>
-                </Table.Th>
-                <Table.Th 
-                  style={{ minWidth: 340, cursor: 'pointer', userSelect: 'none' }}
-                  onClick={() => handleSort('progressPercent')}
-                >
-                  <Group gap={4} wrap="nowrap" align="center">
-                    <Text fw={700} size="sm">공정 진척도 (라이브 스텝 체크)</Text>
-                    {renderSortIcon('progressPercent')}
-                  </Group>
-                </Table.Th>
-                <Table.Th w={90} style={{ whiteSpace: 'nowrap' }}>작업</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {filteredOrders.map(o => {
-                const daysLeft = getDaysRemaining(o.dueDate);
-                const isUrgent = o.status !== '완료' && daysLeft !== null && daysLeft <= 2;
+        {/* 상단 보기 전환 스위치 (표 보기 vs 캘린더 보기) */}
+        <Group justify="space-between" align="center" className="glass-panel" p="xs">
+          <Group gap="xs" style={{ paddingLeft: '8px' }}>
+            <Text fw={800} size="sm" c="gray.7">
+              🖥️ 화면 보기 모드:
+            </Text>
+            <Badge color={viewMode === 'TABLE' ? 'blue' : 'teal'} variant="light" size="md">
+              {viewMode === 'TABLE' ? '📋 목록 표 보기' : '📅 월별 캘린더 보기'}
+            </Badge>
+          </Group>
+          <SegmentedControl
+            value={viewMode}
+            onChange={(val: string) => setViewMode(val as 'TABLE' | 'CALENDAR')}
+            data={[
+              { label: '📋 표 보기', value: 'TABLE' },
+              { label: '📅 캘린더 보기', value: 'CALENDAR' },
+            ]}
+            size="md"
+            radius="md"
+            color="blue"
+          />
+        </Group>
 
-                return (
-                  <Table.Tr 
-                    key={o.id}
-                    style={{
-                      backgroundColor: isUrgent ? 'rgba(254, 226, 226, 0.40)' : undefined
-                    }}
-                  >
-                    <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                      <Badge 
-                        color={o.status === '완료' ? 'green' : isUrgent ? 'red' : 'blue'} 
-                        variant={isUrgent ? 'filled' : 'light'}
-                        size="md"
+        {viewMode === 'CALENDAR' ? (
+          <Paper p="md" radius="lg" className="glass-panel">
+            {/* 캘린더 컨트롤러 바 */}
+            <Group justify="space-between" align="center" mb="md" className="no-print">
+              <Group gap="xs">
+                <Button variant="light" color="blue" size="sm" onClick={prevMonth} leftSection={<IconChevronLeft size={16} />}>
+                  이전달
+                </Button>
+                <Button variant="outline" color="gray" size="sm" onClick={todayMonth}>
+                  오늘
+                </Button>
+                <Button variant="light" color="blue" size="sm" onClick={nextMonth} rightSection={<IconChevronRight size={16} />}>
+                  다음달
+                </Button>
+              </Group>
+
+              <Text fw={900} size="xl" style={{ letterSpacing: '0.5px' }}>
+                📅 {calendarDate.getFullYear()}년 {calendarDate.getMonth() + 1}월 공정 캘린더
+              </Text>
+
+              <Button
+                variant="filled"
+                color="blue"
+                size="sm"
+                leftSection={<IconPrinter size={16} />}
+                onClick={() => {
+                  setPrintInvoicePartner(null);
+                  window.print();
+                }}
+              >
+                🖨️ A4 가로 캘린더 인쇄
+              </Button>
+            </Group>
+
+            {/* 캘린더 그리드 */}
+            <div className="table-responsive-container" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #cbd5e1', tableLayout: 'fixed', minWidth: 750 }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f1f5f9' }}>
+                    {['일 (Sun)', '월 (Mon)', '화 (Tue)', '수 (Wed)', '목 (Thu)', '금 (Fri)', '토 (Sat)'].map((day, idx) => (
+                      <th
+                        key={day}
+                        style={{
+                          padding: '10px 4px',
+                          border: '1px solid #cbd5e1',
+                          textAlign: 'center',
+                          color: idx === 0 ? '#ef4444' : idx === 6 ? '#2563eb' : '#1e293b',
+                          fontWeight: 800,
+                          fontSize: '13px'
+                        }}
                       >
-                        {isUrgent ? '납기임박' : o.status}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Tooltip label="거래처 상세 정보 보기">
-                        <Text 
-                          fw={700} 
-                          c="blue.7"
-                          style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                          onClick={() => handleShowPartnerDetail(o.partnerName, o)}
-                        >
-                          {o.partnerName}
-                        </Text>
-                      </Tooltip>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text fw={600}>{o.itemName}</Text>
-                      <Text size="xs" c="dimmed">{o.quantity}개</Text>
-                    </Table.Td>
-                    <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                      <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{o.orderDate || '-'}</Text>
-                    </Table.Td>
-                    <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                      <Group gap={4} wrap="nowrap" align="center">
-                        <Text 
-                          size="sm" 
-                          fw={isUrgent ? 900 : 600} 
-                          color={isUrgent ? 'red.7' : 'dark'}
-                          style={{ whiteSpace: 'nowrap' }}
-                        >
-                          {o.dueDate || '-'}
-                        </Text>
-                        {isUrgent && (
-                          <Badge 
-                            color="red" 
-                            variant="filled" 
-                            size="xs"
-                            style={{ fontWeight: 800 }}
-                          >
-                            {daysLeft! < 0 ? `D+${Math.abs(daysLeft!)}` : daysLeft === 0 ? 'D-Day' : `D-${daysLeft}`}
-                          </Badge>
-                        )}
-                      </Group>
-                    </Table.Td>
-                  <Table.Td>
-                    <Stack gap="xs">
-                      {/* 프로그레스 바 */}
-                      <Group justify="space-between" gap="xs">
-                        <Progress 
-                          value={o.progressPercent} 
-                          color={o.progressPercent === 100 ? 'teal' : 'blue'} 
-                          size="lg" 
-                          radius="xl" 
-                          animated={o.progressPercent > 0 && o.progressPercent < 100}
-                          style={{ flex: 1 }}
-                        />
-                        <Text size="xs" fw={800} c={o.progressPercent === 100 ? 'teal' : 'blue'}>
-                          {o.progressPercent}% 완료
-                        </Text>
-                      </Group>
+                        {day}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: Math.ceil(calendarDays.length / 7) }).map((_, weekIdx) => {
+                    const weekDays = calendarDays.slice(weekIdx * 7, weekIdx * 7 + 7);
+                    return (
+                      <tr key={weekIdx}>
+                        {weekDays.map((cell, dayIdx) => {
+                          const dayOrders = getOrdersForDate(cell.dateStr);
+                          const isSun = dayIdx === 0;
+                          const isSat = dayIdx === 6;
+                          const isToday = cell.dateStr === todayStr;
 
-                      {/* 공정 스텝 라이브 체크 뱃지 목록 (플랫 미니멀 스타일) */}
-                      <Group gap={4} wrap="wrap">
-                        {(o.steps || []).filter(s => s.active).map(s => (
-                          <Badge
-                            key={s.name}
-                            size="sm"
-                            radius="sm"
-                            variant={s.status === '완료' ? 'light' : s.status === '진행중' ? 'filled' : 'outline'}
-                            color={s.status === '완료' ? 'dark' : s.status === '진행중' ? 'blue' : 'gray.4'}
-                            onClick={() => handleToggleStep(o, s.name)}
-                            style={{ 
-                              cursor: 'pointer', 
-                              userSelect: 'none', 
-                              textTransform: 'none', 
-                              fontWeight: 600,
-                              paddingLeft: '6px',
-                              paddingRight: '6px',
-                              height: '22px'
-                            }}
-                          >
-                            {s.status === '완료' ? `✓ ${s.name} 완료` : s.status === '진행중' ? `▶ ${s.name} 진행중` : s.name}
-                          </Badge>
-                        ))}
-                      </Group>
-                    </Stack>
-                  </Table.Td>
-                    <Table.Td>
-                      <Group gap={4} wrap="nowrap">
-                        <Tooltip label="수정">
-                          <ActionIcon color="dark" variant="subtle" size="sm" onClick={() => handleOpenEdit(o)}>
-                            <IconPencil size={17} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label="선택 품목 거래명세표/송장 인쇄">
-                          <ActionIcon color="indigo.6" variant="subtle" size="sm" onClick={() => handlePrintSingleOrderInvoice(o)}>
-                            <IconPrinter size={17} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label="삭제">
-                          <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleDelete(o.id)}>
-                            <IconTrash size={17} />
-                          </ActionIcon>
-                        </Tooltip>
-                      </Group>
-                    </Table.Td>
-                </Table.Tr>
-              );
-            })}
+                          return (
+                            <td
+                              key={dayIdx}
+                              style={{
+                                height: '115px',
+                                verticalAlign: 'top',
+                                padding: '6px',
+                                border: '1px solid #cbd5e1',
+                                backgroundColor: !cell.isCurrentMonth
+                                  ? '#f8fafc'
+                                  : isToday
+                                  ? '#eff6ff'
+                                  : '#ffffff'
+                              }}
+                            >
+                              {cell.dayNum && (
+                                <Group justify="space-between" align="center" mb={4}>
+                                  <Text
+                                    size="xs"
+                                    fw={800}
+                                    style={{
+                                      backgroundColor: isToday ? '#2563eb' : undefined,
+                                      color: isToday ? '#ffffff' : isSun ? '#ef4444' : isSat ? '#2563eb' : '#334155',
+                                      borderRadius: isToday ? '50%' : undefined,
+                                      width: isToday ? '22px' : undefined,
+                                      height: isToday ? '22px' : undefined,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      paddingLeft: isToday ? 0 : '2px'
+                                    }}
+                                  >
+                                    {cell.dayNum}
+                                  </Text>
+                                  {dayOrders.length > 0 && (
+                                    <Badge size="xs" color="blue" variant="light">
+                                      {dayOrders.length}건
+                                    </Badge>
+                                  )}
+                                </Group>
+                              )}
 
-              {filteredOrders.length === 0 && (
+                              <Stack gap={4}>
+                                {dayOrders.map(o => {
+                                  const isOrderDate = o.orderDate === cell.dateStr;
+                                  const isDueDate = o.dueDate === cell.dateStr;
+                                  const daysLeft = getDaysRemaining(o.dueDate);
+                                  const isUrgent = o.status !== '완료' && daysLeft !== null && daysLeft <= 2;
+
+                                  const badgeColor =
+                                    o.status === '완료'
+                                      ? 'green'
+                                      : isUrgent
+                                      ? 'red'
+                                      : 'blue';
+
+                                  return (
+                                    <Tooltip
+                                      key={o.id}
+                                      label={`[${o.partnerName}] ${o.itemName} | 현재단계: ${getCurrentProcessStage(o)} | 진척도: ${o.progressPercent}%`}
+                                      multiline
+                                      w={220}
+                                    >
+                                      <Paper
+                                        p={4}
+                                        radius="sm"
+                                        style={{
+                                          backgroundColor:
+                                            badgeColor === 'green'
+                                              ? '#f0fdf4'
+                                              : badgeColor === 'red'
+                                              ? '#fef2f2'
+                                              : '#f0f9ff',
+                                          border: `1px solid ${
+                                            badgeColor === 'green'
+                                              ? '#86efac'
+                                              : badgeColor === 'red'
+                                              ? '#fca5a5'
+                                              : '#93c5fd'
+                                          }`,
+                                          cursor: 'pointer',
+                                          fontSize: '11px',
+                                          lineHeight: 1.2
+                                        }}
+                                        onClick={() => handleShowPartnerDetail(o.partnerName, o)}
+                                      >
+                                        <Group justify="space-between" gap={2} wrap="nowrap">
+                                          <Text size="xs" fw={800} truncate="end" c={badgeColor === 'green' ? 'teal.9' : badgeColor === 'red' ? 'red.9' : 'blue.9'}>
+                                            {isDueDate ? '🚨[납기] ' : isOrderDate ? '📦[발주] ' : ''}
+                                            {o.partnerName}
+                                          </Text>
+                                          <Badge size="xs" variant="filled" color={badgeColor} style={{ height: '16px', fontSize: '9px', padding: '0 4px' }}>
+                                            {o.progressPercent}%
+                                          </Badge>
+                                        </Group>
+                                        <Text size="10px" c="gray.7" truncate="end" mt={2}>
+                                          {o.itemName}
+                                        </Text>
+                                      </Paper>
+                                    </Tooltip>
+                                  );
+                                })}
+                              </Stack>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Paper>
+        ) : (
+          /* 공정 진척도 관리 테이블 */
+          <div className="glass-panel table-responsive-container" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <Table striped highlightOnHover withTableBorder verticalSpacing="md">
+              <Table.Thead>
                 <Table.Tr>
-                  <Table.Td colSpan={7} ta="center" py="xl" c="dimmed">
-                    조건에 일치하는 수주 건이 없습니다.
-                  </Table.Td>
+                  <Table.Th w={75} style={{ whiteSpace: 'nowrap' }}>상태</Table.Th>
+                  <Table.Th 
+                    w={140}
+                    onClick={() => handleSort('partnerName')}
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                  >
+                    <Group gap={4} wrap="nowrap" align="center">
+                      <Text fw={700} size="sm">거래처명</Text>
+                      {renderSortIcon('partnerName')}
+                    </Group>
+                  </Table.Th>
+                  <Table.Th w={130}>품목/수량</Table.Th>
+                  <Table.Th 
+                    w={110} 
+                    style={{ whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => handleSort('orderDate')}
+                  >
+                    <Group gap={4} wrap="nowrap" align="center">
+                      <Text fw={700} size="sm">발주일</Text>
+                      {renderSortIcon('orderDate')}
+                    </Group>
+                  </Table.Th>
+                  <Table.Th 
+                    w={110} 
+                    style={{ whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => handleSort('dueDate')}
+                  >
+                    <Group gap={4} wrap="nowrap" align="center">
+                      <Text fw={700} size="sm">납기일</Text>
+                      {renderSortIcon('dueDate')}
+                    </Group>
+                  </Table.Th>
+                  <Table.Th 
+                    style={{ minWidth: 340, cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => handleSort('progressPercent')}
+                  >
+                    <Group gap={4} wrap="nowrap" align="center">
+                      <Text fw={700} size="sm">공정 진척도 (라이브 스텝 체크)</Text>
+                      {renderSortIcon('progressPercent')}
+                    </Group>
+                  </Table.Th>
+                  <Table.Th w={90} style={{ whiteSpace: 'nowrap' }}>작업</Table.Th>
                 </Table.Tr>
-              )}
-            </Table.Tbody>
-          </Table>
-        </div>
+              </Table.Thead>
+              <Table.Tbody>
+                {filteredOrders.map(o => {
+                  const daysLeft = getDaysRemaining(o.dueDate);
+                  const isUrgent = o.status !== '완료' && daysLeft !== null && daysLeft <= 2;
+
+                  return (
+                    <Table.Tr 
+                      key={o.id}
+                      style={{
+                        backgroundColor: isUrgent ? 'rgba(254, 226, 226, 0.40)' : undefined
+                      }}
+                    >
+                      <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                        <Badge 
+                          color={o.status === '완료' ? 'green' : isUrgent ? 'red' : 'blue'} 
+                          variant={isUrgent ? 'filled' : 'light'}
+                          size="md"
+                        >
+                          {isUrgent ? '납기임박' : o.status}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Tooltip label="거래처 상세 정보 보기">
+                          <Text 
+                            fw={700} 
+                            c="blue.7"
+                            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={() => handleShowPartnerDetail(o.partnerName, o)}
+                          >
+                            {o.partnerName}
+                          </Text>
+                        </Tooltip>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text fw={600}>{o.itemName}</Text>
+                        <Text size="xs" c="dimmed">{o.quantity}개</Text>
+                      </Table.Td>
+                      <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                        <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{o.orderDate || '-'}</Text>
+                      </Table.Td>
+                      <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                        <Group gap={4} wrap="nowrap" align="center">
+                          <Text 
+                            size="sm" 
+                            fw={isUrgent ? 900 : 600} 
+                            color={isUrgent ? 'red.7' : 'dark'}
+                            style={{ whiteSpace: 'nowrap' }}
+                          >
+                            {o.dueDate || '-'}
+                          </Text>
+                          {isUrgent && (
+                            <Badge 
+                              color="red" 
+                              variant="filled" 
+                              size="xs"
+                              style={{ fontWeight: 800 }}
+                            >
+                              {daysLeft! < 0 ? `D+${Math.abs(daysLeft!)}` : daysLeft === 0 ? 'D-Day' : `D-${daysLeft}`}
+                            </Badge>
+                          )}
+                        </Group>
+                      </Table.Td>
+                    <Table.Td>
+                      <Stack gap="xs">
+                        {/* 프로그레스 바 */}
+                        <Group justify="space-between" gap="xs">
+                          <Progress 
+                            value={o.progressPercent} 
+                            color={o.progressPercent === 100 ? 'teal' : 'blue'} 
+                            size="lg" 
+                            radius="xl" 
+                            animated={o.progressPercent > 0 && o.progressPercent < 100}
+                            style={{ flex: 1 }}
+                          />
+                          <Text size="xs" fw={800} c={o.progressPercent === 100 ? 'teal' : 'blue'}>
+                            {o.progressPercent}% 완료
+                          </Text>
+                        </Group>
+
+                        {/* 공정 스텝 라이브 체크 뱃지 목록 (플랫 미니멀 스타일) */}
+                        <Group gap={4} wrap="wrap">
+                          {(o.steps || []).filter(s => s.active).map(s => (
+                            <Badge
+                              key={s.name}
+                              size="sm"
+                              radius="sm"
+                              variant={s.status === '완료' ? 'light' : s.status === '진행중' ? 'filled' : 'outline'}
+                              color={s.status === '완료' ? 'dark' : s.status === '진행중' ? 'blue' : 'gray.4'}
+                              onClick={() => handleToggleStep(o, s.name)}
+                              style={{ 
+                                cursor: 'pointer', 
+                                userSelect: 'none', 
+                                textTransform: 'none', 
+                                fontWeight: 600,
+                                paddingLeft: '6px',
+                                paddingRight: '6px',
+                                height: '22px'
+                              }}
+                            >
+                              {s.status === '완료' ? `✓ ${s.name} 완료` : s.status === '진행중' ? `▶ ${s.name} 진행중` : s.name}
+                            </Badge>
+                          ))}
+                        </Group>
+                      </Stack>
+                    </Table.Td>
+                      <Table.Td>
+                        <Group gap={4} wrap="nowrap">
+                          <Tooltip label="수정">
+                            <ActionIcon color="dark" variant="subtle" size="sm" onClick={() => handleOpenEdit(o)}>
+                              <IconPencil size={17} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="선택 품목 거래명세표/송장 인쇄">
+                            <ActionIcon color="indigo.6" variant="subtle" size="sm" onClick={() => handlePrintSingleOrderInvoice(o)}>
+                              <IconPrinter size={17} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="삭제">
+                            <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleDelete(o.id)}>
+                              <IconTrash size={17} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+
+                {filteredOrders.length === 0 && (
+                  <Table.Tr>
+                    <Table.Td colSpan={7} ta="center" py="xl" c="dimmed">
+                      조건에 일치하는 수주 건이 없습니다.
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+              </Table.Tbody>
+            </Table>
+          </div>
+        )}
 
         {/* 수주 등록 / 수정 모달 */}
         <Modal 
@@ -1121,6 +1371,74 @@ export default function OrdersPage() {
                 <div>{printInvoicePartner.memo || '인수 확인 후 서명 또는 도인을 날인하여 주시기 바랍니다.'}</div>
               </div>
             </div>
+          </div>
+        ) : viewMode === 'CALENDAR' ? (
+          <div className="orders-print-page">
+            <div style={{ textAlign: 'center', marginBottom: '3mm' }}>
+              <h1 style={{ fontSize: '16pt', fontWeight: 800, margin: 0, padding: 0, display: 'inline-block' }}>
+                TASS 현장 지시용 월간 공정 캘린더 ({calendarDate.getFullYear()}년 {calendarDate.getMonth() + 1}월)
+              </h1>
+              <span style={{ fontSize: '9pt', color: '#444', marginLeft: '12px' }}>
+                (출력일자: {todayStr} | Technology About Safety Systems)
+              </span>
+            </div>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt', tableLayout: 'fixed' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f1f5f9' }}>
+                  {['일 (Sun)', '월 (Mon)', '화 (Tue)', '수 (Wed)', '목 (Thu)', '금 (Fri)', '토 (Sat)'].map((day, idx) => (
+                    <th key={day} style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center', color: idx === 0 ? '#dc2626' : idx === 6 ? '#2563eb' : '#000', fontWeight: 'bold' }}>
+                      {day}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: Math.ceil(calendarDays.length / 7) }).map((_, weekIdx) => {
+                  const weekDays = calendarDays.slice(weekIdx * 7, weekIdx * 7 + 7);
+                  return (
+                    <tr key={weekIdx}>
+                      {weekDays.map((cell, dayIdx) => {
+                        const dayOrders = getOrdersForDate(cell.dateStr);
+                        return (
+                          <td
+                            key={dayIdx}
+                            style={{
+                              border: '1px solid #000',
+                              height: '24mm',
+                              verticalAlign: 'top',
+                              padding: '1.5mm',
+                              backgroundColor: !cell.isCurrentMonth ? '#f8fafc' : '#ffffff'
+                            }}
+                          >
+                            {cell.dayNum && (
+                              <div style={{ fontWeight: 'bold', fontSize: '9pt', marginBottom: '1mm', color: dayIdx === 0 ? '#dc2626' : dayIdx === 6 ? '#2563eb' : '#000' }}>
+                                {cell.dayNum}
+                              </div>
+                            )}
+                            {dayOrders.map(o => (
+                              <div
+                                key={o.id}
+                                style={{
+                                  fontSize: '7.5pt',
+                                  lineHeight: 1.2,
+                                  marginBottom: '1mm',
+                                  padding: '1mm',
+                                  border: '1px solid #000',
+                                  backgroundColor: o.status === '완료' ? '#e6f4ea' : o.status === '납기임박' ? '#fce8e6' : '#e8f0fe'
+                                }}
+                              >
+                                <strong>[{o.partnerName}]</strong> {o.itemName} ({o.progressPercent}%)
+                              </div>
+                            ))}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         ) : (
           <div className="orders-print-page">

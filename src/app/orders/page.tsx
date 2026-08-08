@@ -575,8 +575,7 @@ export default function OrdersPage() {
     return filteredOrders.filter(o => {
       const isOrderDate = o.orderDate === dateStr;
       const isDueDate = o.dueDate === dateStr;
-      const isInBetween = Boolean(o.orderDate && o.dueDate && o.orderDate <= dateStr && dateStr <= o.dueDate);
-      return isOrderDate || isDueDate || isInBetween;
+      return isOrderDate || isDueDate;
     });
   }, [filteredOrders]);
 
@@ -834,19 +833,30 @@ export default function OrdersPage() {
                                   const isOrderDate = o.orderDate === cell.dateStr;
                                   const isDueDate = o.dueDate === cell.dateStr;
                                   const daysLeft = getDaysRemaining(o.dueDate);
-                                  const isUrgent = o.status !== '완료' && daysLeft !== null && daysLeft <= 2;
+                                  const isCompleted = o.status === '완료';
+                                  const isUrgent = !isCompleted && daysLeft !== null && daysLeft <= 2;
 
-                                  const badgeColor =
-                                    o.status === '완료'
-                                      ? 'green'
-                                      : isUrgent
-                                      ? 'red'
-                                      : 'blue';
+                                  let prefix = '📦 [발주]';
+                                  let badgeColor = 'blue';
+
+                                  if (isCompleted) {
+                                    prefix = '✅ [완료]';
+                                    badgeColor = 'green';
+                                  } else if (isDueDate && isUrgent) {
+                                    prefix = '🚨 [납기]';
+                                    badgeColor = 'red';
+                                  } else if (isDueDate) {
+                                    prefix = '🚚 [납품]';
+                                    badgeColor = 'blue';
+                                  } else if (isOrderDate) {
+                                    prefix = '📦 [발주]';
+                                    badgeColor = 'blue';
+                                  }
 
                                   return (
                                     <Tooltip
-                                      key={o.id}
-                                      label={`[${o.partnerName}] ${o.itemName} | 현재단계: ${getCurrentProcessStage(o)} | 진척도: ${o.progressPercent}%`}
+                                      key={`${o.id}-${cell.dateStr}`}
+                                      label={`[${o.partnerName}] ${o.itemName} (${o.quantity}개) | 현재상태: ${o.status} (${o.progressPercent}%)`}
                                       multiline
                                       w={220}
                                     >
@@ -869,21 +879,20 @@ export default function OrdersPage() {
                                           }`,
                                           cursor: 'pointer',
                                           fontSize: '11px',
-                                          lineHeight: 1.2
+                                          lineHeight: 1.25
                                         }}
                                         onClick={() => handleShowPartnerDetail(o.partnerName, o)}
                                       >
                                         <Group justify="space-between" gap={2} wrap="nowrap">
                                           <Text size="xs" fw={800} truncate="end" c={badgeColor === 'green' ? 'teal.9' : badgeColor === 'red' ? 'red.9' : 'blue.9'}>
-                                            {isDueDate ? '🚨[납기] ' : isOrderDate ? '📦[발주] ' : ''}
-                                            {o.partnerName}
+                                            {prefix} {o.itemName}
                                           </Text>
-                                          <Badge size="xs" variant="filled" color={badgeColor} style={{ height: '16px', fontSize: '9px', padding: '0 4px' }}>
-                                            {o.progressPercent}%
+                                          <Badge size="xs" variant="filled" color={badgeColor} style={{ height: '16px', fontSize: '9px', padding: '0 4px', flexShrink: 0 }}>
+                                            {isCompleted ? '완료' : `${o.quantity}개`}
                                           </Badge>
                                         </Group>
-                                        <Text size="10px" c="gray.7" truncate="end" mt={2}>
-                                          {o.itemName}
+                                        <Text size="10px" c="gray.6" truncate="end" mt={2}>
+                                          🏢 {o.partnerName}
                                         </Text>
                                       </Paper>
                                     </Tooltip>
@@ -1416,21 +1425,30 @@ export default function OrdersPage() {
                                 {cell.dayNum}
                               </div>
                             )}
-                            {dayOrders.map(o => (
-                              <div
-                                key={o.id}
-                                style={{
-                                  fontSize: '7.5pt',
-                                  lineHeight: 1.2,
-                                  marginBottom: '1mm',
-                                  padding: '1mm',
-                                  border: '1px solid #000',
-                                  backgroundColor: o.status === '완료' ? '#e6f4ea' : o.status === '납기임박' ? '#fce8e6' : '#e8f0fe'
-                                }}
-                              >
-                                <strong>[{o.partnerName}]</strong> {o.itemName} ({o.progressPercent}%)
-                              </div>
-                            ))}
+                            {dayOrders.map(o => {
+                              const isOrderDate = o.orderDate === cell.dateStr;
+                              const isDueDate = o.dueDate === cell.dateStr;
+                              const isCompleted = o.status === '완료';
+                              const daysLeft = getDaysRemaining(o.dueDate);
+                              const isUrgent = !isCompleted && daysLeft !== null && daysLeft <= 2;
+                              const tag = isCompleted ? '[완료]' : isUrgent ? '[🚨납기]' : isDueDate ? '[🚚납품]' : '[📦발주]';
+                              
+                              return (
+                                <div
+                                  key={o.id}
+                                  style={{
+                                    fontSize: '7.5pt',
+                                    lineHeight: 1.2,
+                                    marginBottom: '1mm',
+                                    padding: '1mm',
+                                    border: '1px solid #000',
+                                    backgroundColor: isCompleted ? '#e6f4ea' : isUrgent ? '#fce8e6' : '#e8f0fe'
+                                  }}
+                                >
+                                  <strong>{tag}</strong> {o.itemName} ({o.quantity}개)
+                                </div>
+                              );
+                            })}
                           </td>
                         );
                       })}

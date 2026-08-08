@@ -4,6 +4,8 @@ import { useRef } from 'react';
 import { Group, Text, Button, Stack, Container, SimpleGrid, Paper, Badge } from '@mantine/core';
 import { IconChevronDown, IconArrowRight } from '@tabler/icons-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import CompanyIntroduction from '@/components/CompanyIntroduction';
 import KeyProductsSection from '@/components/KeyProductsSection';
 import CustomerSupportSection from '@/components/CustomerSupportSection';
@@ -11,6 +13,17 @@ import BgmPlayer from '@/components/BgmPlayer';
 import PWAInstallButton from '@/components/PWAInstallButton';
 
 export default function LandingPage() {
+  const router = useRouter();
+  const { isAuthenticated, openAuthModal } = useAuth();
+
+  const handleNavTarget = (path: string) => {
+    if (isAuthenticated) {
+      router.push(path);
+    } else {
+      openAuthModal(path);
+    }
+  };
+
   // Outer Scroll Snap Container Ref
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -108,11 +121,16 @@ export default function LandingPage() {
           
           <PWAInstallButton variant="header" />
           
-          <Link href="/partners" style={{ textDecoration: 'none' }}>
-            <Button color="blue.6" variant="filled" radius="xl" size="sm" rightSection={<IconArrowRight size={15} />}>
-              관리자 시스템 접속
-            </Button>
-          </Link>
+          <Button 
+            color="blue.6" 
+            variant="filled" 
+            radius="xl" 
+            size="sm" 
+            rightSection={<IconArrowRight size={15} />}
+            onClick={() => handleNavTarget('/partners')}
+          >
+            관리자 시스템 접속
+          </Button>
         </Group>
       </header>
 
@@ -208,7 +226,7 @@ export default function LandingPage() {
 
             {/* Quick Access Minimal Cards */}
             <SimpleGrid cols={{ base: 1, sm: 2, md: 5 }} spacing="md" style={{ width: '100%', maxWidth: '1150px' }}>
-              <Link href="/partners" style={{ textDecoration: 'none', display: 'block' }}>
+              <div onClick={() => handleNavTarget('/partners')} style={{ display: 'block' }}>
                 <Paper 
                   p="lg" 
                   radius="md" 
@@ -228,9 +246,9 @@ export default function LandingPage() {
                   </Group>
                   <Text size="xs" c="gray.3" ta="left">협력사 / 매입처 / 매출처 DB</Text>
                 </Paper>
-              </Link>
+              </div>
 
-              <Link href="/estimates" style={{ textDecoration: 'none', display: 'block' }}>
+              <div onClick={() => handleNavTarget('/estimates')} style={{ display: 'block' }}>
                 <Paper 
                   p="lg" 
                   radius="md" 
@@ -250,9 +268,9 @@ export default function LandingPage() {
                   </Group>
                   <Text size="xs" c="gray.3" ta="left">A4 인쇄 & 엑셀 내보내기</Text>
                 </Paper>
-              </Link>
+              </div>
 
-              <Link href="/orders" style={{ textDecoration: 'none', display: 'block' }}>
+              <div onClick={() => handleNavTarget('/orders')} style={{ display: 'block' }}>
                 <Paper 
                   p="lg" 
                   radius="md" 
@@ -272,9 +290,9 @@ export default function LandingPage() {
                   </Group>
                   <Text size="xs" c="gray.3" ta="left">진척도 & 엑셀 다운로드</Text>
                 </Paper>
-              </Link>
+              </div>
 
-              <Link href="/support-projects" style={{ textDecoration: 'none', display: 'block' }}>
+              <div onClick={() => handleNavTarget('/support-projects')} style={{ display: 'block' }}>
                 <Paper 
                   p="lg" 
                   radius="md" 
@@ -294,9 +312,9 @@ export default function LandingPage() {
                   </Group>
                   <Text size="xs" c="gray.3" ta="left">🏛️ 공고 관제 & 엑셀</Text>
                 </Paper>
-              </Link>
+              </div>
 
-              <Link href="/blog" style={{ textDecoration: 'none', display: 'block' }}>
+              <div onClick={() => handleNavTarget('/blog')} style={{ display: 'block' }}>
                 <Paper 
                   p="lg" 
                   radius="md" 
@@ -316,7 +334,7 @@ export default function LandingPage() {
                   </Group>
                   <Text size="xs" c="gray.3" ta="left">AI 홍보 원고 자동 생성</Text>
                 </Paper>
-              </Link>
+              </div>
             </SimpleGrid>
 
             {/* Scroll Down Trigger */}

@@ -14,6 +14,7 @@ import {
 } from '@tabler/icons-react';
 import * as XLSX from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
+import { useAuth } from '@/context/AuthContext';
 
 type ProcessStep = {
   name: string;
@@ -276,12 +277,22 @@ export default function OrdersPage() {
     setEditingOrder(null);
   };
 
+  const { canEdit } = useAuth();
+
   const handleOpenCreate = () => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 신규 수주 등록이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     resetForm();
     open();
   };
 
   const handleOpenEdit = (order: Order) => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 수주 정보 수정이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     setEditingOrder(order);
     setPartnerName(order.partnerName);
     setItemName(order.itemName);
@@ -322,6 +333,11 @@ export default function OrdersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!canEdit) {
+      alert('직원 권한(1234)은 수주 저장이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
 
     const processSteps: ProcessStep[] = DEFAULT_STEPS.map(name => {
       const isActive = activeStepNames.includes(name);
@@ -368,6 +384,11 @@ export default function OrdersPage() {
   };
 
   const handleToggleStep = async (order: Order, stepName: string) => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 공정 단계 변경이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
+
     const updatedSteps = order.steps.map(s => {
       if (s.name === stepName) {
         const nextStatus: '대기' | '진행중' | '완료' = 
@@ -407,6 +428,10 @@ export default function OrdersPage() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 수주 삭제가 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     if (confirm('이 수주 건을 삭제하시겠습니까?')) {
       await fetch(`/api/orders/${id}`, { method: 'DELETE' });
       fetchOrders();

@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 
 import ClientShell from "@/components/ClientShell";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://tass-website.vercel.app'),
@@ -101,9 +102,11 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col m-0 p-0">
         <ServiceWorkerRegister />
         <MantineProvider theme={theme} defaultColorScheme="light">
-          <ClientShell>
-            {children}
-          </ClientShell>
+          <AuthProvider>
+            <ClientShell>
+              {children}
+            </ClientShell>
+          </AuthProvider>
         </MantineProvider>
       </body>
     </html>

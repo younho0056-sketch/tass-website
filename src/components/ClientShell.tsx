@@ -1,23 +1,38 @@
 "use client";
 
-import { AppShell, Burger, Group, NavLink, Title, Text, Box } from '@mantine/core';
+import { useEffect } from 'react';
+import { AppShell, Burger, Group, NavLink, Title, Text, Box, Badge, Button, Paper, Stack, Center } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet, IconBuildingBank } from '@tabler/icons-react';
+import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet, IconBuildingBank, IconLock, IconLogout, IconKey } from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import BgmPlayer from '@/components/BgmPlayer';
 import PWAInstallButton from '@/components/PWAInstallButton';
+import AuthModal from '@/components/AuthModal';
+import { useAuth } from '@/context/AuthContext';
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const [opened, { toggle }] = useDisclosure();
   const pathname = usePathname();
+  const { isAuthenticated, role, logout, openAuthModal } = useAuth();
 
   const handleNavClick = () => {
     if (opened) toggle();
   };
 
+  useEffect(() => {
+    if (pathname !== '/' && !isAuthenticated) {
+      openAuthModal(pathname);
+    }
+  }, [pathname, isAuthenticated, openAuthModal]);
+
   if (pathname === '/') {
-    return <>{children}</>;
+    return (
+      <>
+        {children}
+        <AuthModal />
+      </>
+    );
   }
 
   return (
@@ -27,6 +42,8 @@ export default function ClientShell({ children }: { children: React.ReactNode })
       padding="md"
       style={{ backgroundColor: 'transparent' }}
     >
+      <AuthModal />
+
       <AppShell.Header 
         style={{ 
           backgroundColor: '#0f172a', 
@@ -62,11 +79,41 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             <BgmPlayer />
           </Group>
 
-          <Group gap="md" align="center">
+          <Group gap="sm" align="center">
             <PWAInstallButton />
-            <Text size="xs" style={{ color: '#94a3b8', fontWeight: 500 }} visibleFrom="sm">
-              Technology About Safety Systems
-            </Text>
+            
+            {/* 권한 상태 표시 배지 */}
+            {isAuthenticated ? (
+              <Group gap="xs">
+                {role === 'admin' ? (
+                  <Badge color="blue" size="md" variant="filled" leftSection={<IconKey size={12} />}>
+                    🔑 관리자 (수정권한)
+                  </Badge>
+                ) : (
+                  <Badge color="teal" size="md" variant="filled">
+                    👁️ 직원 (조회/출력)
+                  </Badge>
+                )}
+                <Button 
+                  size="xs" 
+                  variant="subtle" 
+                  color="gray.4" 
+                  onClick={logout}
+                  leftSection={<IconLogout size={14} />}
+                >
+                  로그아웃
+                </Button>
+              </Group>
+            ) : (
+              <Button 
+                size="xs" 
+                color="blue" 
+                onClick={() => openAuthModal(pathname)}
+                leftSection={<IconLock size={14} />}
+              >
+                비밀번호 입력
+              </Button>
+            )}
           </Group>
         </Group>
       </AppShell.Header>
@@ -134,7 +181,35 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
       <AppShell.Main>
         <Box p={{ base: 'xs', sm: 'md' }} style={{ minHeight: 'calc(100vh - 80px)', width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
-          {children}
+          {isAuthenticated ? (
+            children
+          ) : (
+            <Center style={{ minHeight: 'calc(100vh - 120px)' }}>
+              <Paper p="xl" radius="lg" shadow="md" style={{ maxWidth: 420, border: '1px solid #e2e8f0' }}>
+                <Stack align="center" gap="md">
+                  <div style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: '50%',
+                    backgroundColor: '#eff6ff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#2563eb'
+                  }}>
+                    <IconLock size={32} />
+                  </div>
+                  <Title order={3}>시스템 접근 제한</Title>
+                  <Text size="sm" c="dimmed" ta="center">
+                    보안 정책에 따라 TASS 시스템 진입을 위해 비밀번호(PIN) 인증이 필요합니다.
+                  </Text>
+                  <Button size="md" color="blue" fullWidth onClick={() => openAuthModal(pathname)}>
+                    비밀번호 입력하여 접속
+                  </Button>
+                </Stack>
+              </Paper>
+            </Center>
+          )}
         </Box>
       </AppShell.Main>
     </AppShell>

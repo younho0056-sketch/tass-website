@@ -14,6 +14,7 @@ import {
 } from '@tabler/icons-react';
 import * as xlsx from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
+import { useAuth } from '@/context/AuthContext';
 
 type EstimateItem = {
   no: number;
@@ -216,12 +217,22 @@ export default function EstimatesPage() {
     setEditingEst(null);
   };
 
+  const { canEdit } = useAuth();
+
   const handleOpenCreate = () => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 신규 견적서 작성 및 등록이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     resetForm();
     open();
   };
 
   const handleOpenEdit = (est: Estimate) => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 견적서 수정이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     setEditingEst(est);
     setDocNo(est.docNo);
     setPartnerName(est.partnerName);
@@ -284,6 +295,11 @@ export default function EstimatesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!canEdit) {
+      alert('직원 권한(1234)은 견적서 저장이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
+
     if (!partnerName) {
       alert('거래처명을 선택하거나 입력하세요.');
       return;
@@ -345,6 +361,10 @@ export default function EstimatesPage() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 견적서 삭제가 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     if (confirm('이 견적서를 삭제하시겠습니까?')) {
       await fetch(`/api/estimates/${id}`, { method: 'DELETE' });
       fetchEstimates();

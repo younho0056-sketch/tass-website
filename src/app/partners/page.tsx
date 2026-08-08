@@ -11,6 +11,7 @@ import { IconTrash, IconMail, IconPrinter, IconDownload, IconUpload, IconPencil,
 import { useRouter } from 'next/navigation';
 import * as xlsx from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
+import { useAuth } from '@/context/AuthContext';
 
 type Partner = {
   id: number;
@@ -85,6 +86,8 @@ export default function PartnersPage() {
     return Array.from(set);
   }, [partners]);
 
+  const { canEdit } = useAuth();
+
   const resetForm = () => {
     setName('');
     setManager('');
@@ -100,11 +103,19 @@ export default function PartnersPage() {
   };
 
   const handleOpenCreate = () => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 거래처 등록이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     resetForm();
     open();
   };
 
   const handleOpenEdit = (partner: Partner) => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 거래처 정보 수정이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     setEditingPartner(partner);
     setType(partner.type || '매출처');
     setName(partner.name || '');
@@ -121,6 +132,10 @@ export default function PartnersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEdit) {
+      alert('직원 권한(1234)은 저장 및 수정이 불가능합니다.');
+      return;
+    }
 
     const bodyData = { 
       type, name, manager, email, phone, tel, fax, address, memo,
@@ -153,6 +168,10 @@ export default function PartnersPage() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 삭제가 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     if (confirm('이 거래처를 삭제하시겠습니까?')) {
       await fetch(`/api/partners/${id}`, { method: 'DELETE' });
       setSelectedIds(prev => prev.filter(i => i !== id));
@@ -161,6 +180,10 @@ export default function PartnersPage() {
   };
 
   const handleBulkDelete = async () => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 삭제가 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     if (selectedIds.length === 0) return;
     if (confirm(`선택한 ${selectedIds.length}개의 거래처를 일괄 삭제하시겠습니까?`)) {
       try {
@@ -243,6 +266,10 @@ export default function PartnersPage() {
 
   const handleImport = async (file: File | null) => {
     if (!file) return;
+    if (!canEdit) {
+      alert('직원 권한(1234)은 엑셀 등록이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     const formData = new FormData();
     formData.append('file', file);
     

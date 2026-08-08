@@ -9,6 +9,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { IconFolderPlus, IconUpload, IconWand, IconCopy, IconTrash } from '@tabler/icons-react';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
+import { useAuth } from '@/context/AuthContext';
 
 type Photo = { id: number; url: string };
 type Folder = { id: number; name: string; photos: Photo[] };
@@ -42,7 +43,13 @@ export default function BlogPage() {
     fetchFolders();
   }, [fetchFolders]);
 
+  const { canEdit } = useAuth();
+
   const handleCreateFolder = async () => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 신규 폴더 생성이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     if (!newFolderName || !newFolderName.trim()) return;
     await fetch('/api/folders', {
       method: 'POST',
@@ -55,6 +62,10 @@ export default function BlogPage() {
   };
 
   const handleDeleteSingleFolder = async (folder: Folder) => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 폴더 삭제가 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     if (confirm(`'${folder.name}' 프로젝트 폴더와 포함된 사진들을 모두 삭제하시겠습니까?`)) {
       try {
         const res = await fetch(`/api/folders/${folder.id}`, { method: 'DELETE' });
@@ -71,6 +82,10 @@ export default function BlogPage() {
   };
 
   const handleBulkDeleteFolders = async () => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 일괄 삭제가 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     if (selectedFolderIds.length === 0) return;
     if (confirm(`선택한 ${selectedFolderIds.length}개의 프로젝트 폴더를 일괄 삭제하시겠습니까?`)) {
       try {
@@ -107,6 +122,10 @@ export default function BlogPage() {
   };
 
   const handleUpload = async (files: File[] | null, folderId: number) => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 현장 사진 업로드가 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     if (!files || files.length === 0) return;
     const formData = new FormData();
     files.forEach((file) => formData.append('files', file));
@@ -147,6 +166,10 @@ export default function BlogPage() {
   };
 
   const handleGenerate = async () => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 AI 홍보 원고 생성 기능이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     if (!activeFolder) return;
     
     setGenerating(true);
@@ -160,6 +183,10 @@ export default function BlogPage() {
   };
 
   const openGeneratorModal = (folder: Folder) => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 AI 홍보 원고 작성 기능이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
     setActiveFolder(folder);
     setKeyword('부산 용접, 구조물 제작'); // default
     setGeneratedText('');

@@ -1,43 +1,24 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import useSWR from 'swr';
+import { notifications } from '@mantine/notifications';
 import { 
   Button, Stack, Group, Text, Badge, TextInput, 
-  Modal, Select, Table, ActionIcon, Tooltip, Progress,
+  Modal, Select, Table, Tooltip, Progress,
   NumberInput, SimpleGrid, Textarea, Checkbox,
-  SegmentedControl, Card, Paper, Title
+  SegmentedControl, Card, Paper
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { 
-  IconPlus, IconPencil, IconTrash, IconSearch, 
+  IconPlus, IconSearch, 
   IconPhone, IconMail, IconPrinter, IconDownload,
-  IconCalendar, IconChevronLeft, IconChevronRight, IconListCheck
+  IconChevronLeft, IconChevronRight
 } from '@tabler/icons-react';
 import * as XLSX from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
 import { useAuth } from '@/context/AuthContext';
-
-type ProcessStep = {
-  name: string;
-  status: '대기' | '진행중' | '완료';
-  active: boolean;
-};
-
-type Order = {
-  id: number;
-  partnerName: string;
-  partnerId: number | null;
-  itemName: string;
-  quantity: number;
-  orderDate: string | null;
-  dueDate: string | null;
-  status: string;
-  processSteps: string;
-  steps: ProcessStep[];
-  progressPercent: number;
-  memo: string | null;
-  createdAt: string;
-};
+import OrderRow, { Order, ProcessStep } from '@/components/OrderRow';
 
 type PartnerDetail = {
   id: number;
@@ -65,11 +46,6 @@ function getDaysRemaining(dueDateStr: string | null | undefined): number | null 
   const diffTime = target.getTime() - today.getTime();
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
-
-type PartnerOption = {
-  value: string;
-  label: string;
-};
 
 const DEFAULT_STEPS = ['설계', '절단', '가공', '용접', '도장', '조립/납품'];
 
@@ -171,9 +147,38 @@ const DETAIL_FILTER_OPTIONS = [
   ]}
 ];
 
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('API fetch error');
+  return res.json();
+};
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>(INITIAL_MOCK_ORDERS);
   const [allPartners, setAllPartners] = useState<PartnerDetail[]>([]);
+
+  // SWR Caching for instant load & background revalidation
+  const { data: ordersData, mutate: mutateOrders } = useSWR('/api/orders', fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 5000,
+  });
+
+  const { data: partnersData } = useSWR('/api/partners', fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 10000,
+  });
+
+  useEffect(() => {
+    if (ordersData?.orders && Array.isArray(ordersData.orders) && ordersData.orders.length > 0) {
+      setOrders(ordersData.orders);
+    }
+  }, [ordersData]);
+
+  useEffect(() => {
+    if (Array.isArray(partnersData)) {
+      setAllPartners(partnersData);
+    }
+  }, [partnersData]);
 
   // Search, Filter & Sort State
   const [search, setSearch] = useState('');
@@ -186,9 +191,9 @@ export default function OrdersPage() {
   const [viewMode, setViewMode] = useState<'TABLE' | 'CALENDAR'>('TABLE');
   const [calendarDate, setCalendarDate] = useState<Date>(new Date(2026, 7, 1));
 
-  const prevMonth = () => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-  const nextMonth = () => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-  const todayMonth = () => setCalendarDate(new Date());
+  const prevMonth = useCallback(() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)), []);
+  const nextMonth = useCallback(() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)), []);
+  const todayMonth = useCallback(() => setCalendarDate(new Date()), []);
 
   const calendarDays = useMemo(() => {
     const year = calendarDate.getFullYear();
@@ -239,16 +244,23 @@ export default function OrdersPage() {
   // Client hydration state
   const [mounted, setMounted] = useState(false);
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortField(field);
-      setSortOrder(field === 'progressPercent' ? 'desc' : 'asc');
-    }
-  };
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
-  const renderSortIcon = (field: SortField) => {
+  const handleSort = useCallback((field: SortField) => {
+    setSortField(prevField => {
+      if (prevField === field) {
+        setSortOrder(prevOrder => (prevOrder === 'asc' ? 'desc' : 'asc'));
+        return field;
+      }
+      setSortOrder(field === 'progressPercent' ? 'desc' : 'asc');
+      return field;
+    });
+  }, []);
+
+  const renderSortIcon = useCallback((field: SortField) => {
     if (sortField !== field) {
       return <Text component="span" c="gray.4" size="xs" fw={700} style={{ marginLeft: 4 }}>↕</Text>;
     }
@@ -257,7 +269,7 @@ export default function OrdersPage() {
         {sortOrder === 'asc' ? '▲' : '▼'}
       </Text>
     );
-  };
+  }, [sortField, sortOrder]);
 
   const selectPartnerData = useMemo(() => {
     const options = allPartners.map(p => ({
@@ -270,38 +282,7 @@ export default function OrdersPage() {
     return [{ value: partnerName, label: partnerName }, ...options];
   }, [allPartners, partnerName]);
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      const res = await fetch('/api/orders');
-      const data = await res.json();
-      if (data.orders && data.orders.length > 0) {
-        setOrders(data.orders);
-      }
-    } catch (e) {
-      console.error('API fetch orders error, using fallback mock data:', e);
-    }
-  }, []);
-
-  const fetchPartners = useCallback(async () => {
-    try {
-      const res = await fetch('/api/partners');
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setAllPartners(data);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true);
-    fetchOrders();
-    fetchPartners();
-  }, [fetchOrders, fetchPartners]);
-
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setPartnerName('');
     setItemName('');
     setQuantity(1);
@@ -310,20 +291,20 @@ export default function OrdersPage() {
     setMemo('');
     setActiveStepNames(DEFAULT_STEPS);
     setEditingOrder(null);
-  };
+  }, []);
 
   const { canEdit } = useAuth();
 
-  const handleOpenCreate = () => {
+  const handleOpenCreate = useCallback(() => {
     if (!canEdit) {
       alert('직원 권한(1234)은 신규 수주 등록이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
       return;
     }
     resetForm();
     open();
-  };
+  }, [canEdit, resetForm, open]);
 
-  const handleOpenEdit = (order: Order) => {
+  const handleOpenEdit = useCallback((order: Order) => {
     if (!canEdit) {
       alert('직원 권한(1234)은 수주 정보 수정이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
       return;
@@ -341,11 +322,11 @@ export default function OrdersPage() {
       .map(s => s.name);
     setActiveStepNames(activeNames.length > 0 ? activeNames : DEFAULT_STEPS);
     open();
-  };
+  }, [canEdit, open]);
 
-  const handleShowPartnerDetail = (pName: string, order?: Order) => {
-    const partner = allPartners.find(p => p.name === pName);
+  const handleShowPartnerDetail = useCallback((pName: string, order?: Order) => {
     setSelectedOrderForInvoice(order || null);
+    const partner = allPartners.find(p => p.name === pName);
     if (partner) {
       setSelectedPartnerDetail(partner);
     } else {
@@ -364,9 +345,9 @@ export default function OrdersPage() {
       });
     }
     openPartnerModal();
-  };
+  }, [allPartners, openPartnerModal]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!canEdit) {
@@ -412,13 +393,14 @@ export default function OrdersPage() {
 
       close();
       resetForm();
-      fetchOrders();
+      if (mutateOrders) mutateOrders();
     } catch (err) {
       alert('요청 처리 중 오류가 발생했습니다.');
     }
-  };
+  }, [canEdit, activeStepNames, editingOrder, partnerName, itemName, quantity, orderDate, dueDate, memo, close, resetForm, mutateOrders]);
 
-  const handleToggleStep = async (order: Order, stepName: string) => {
+  // Optimistic Update with instant 0ms state mutation and background API call + rollback on error
+  const handleToggleStep = useCallback(async (order: Order, stepName: string) => {
     if (!canEdit) {
       alert('직원 권한(1234)은 공정 단계 변경이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
       return;
@@ -440,15 +422,37 @@ export default function OrdersPage() {
     const isAllComplete = activeSteps.length > 0 && completedSteps.length === activeSteps.length;
     const newStatus = isAllComplete ? '완료' : (order.status === '완료' ? '진행중' : order.status);
 
-    setOrders(prev => prev.map(o => o.id === order.id ? {
-      ...o,
-      steps: updatedSteps,
-      progressPercent: newPercent,
-      status: newStatus
-    } : o));
+    let snapshotOrders: Order[] = [];
 
+    // 1. Instant (0ms) Optimistic Update on UI & SWR cache
+    setOrders(prev => {
+      snapshotOrders = prev;
+      return prev.map(o => o.id === order.id ? {
+        ...o,
+        steps: updatedSteps,
+        progressPercent: newPercent,
+        status: newStatus
+      } : o);
+    });
+
+    if (mutateOrders) {
+      mutateOrders((currentData: any) => {
+        if (!currentData?.orders) return currentData;
+        return {
+          ...currentData,
+          orders: currentData.orders.map((o: Order) => o.id === order.id ? {
+            ...o,
+            steps: updatedSteps,
+            progressPercent: newPercent,
+            status: newStatus
+          } : o)
+        };
+      }, false);
+    }
+
+    // 2. Background DB Update
     try {
-      await fetch(`/api/orders/${order.id}`, {
+      const res = await fetch(`/api/orders/${order.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -456,32 +460,65 @@ export default function OrdersPage() {
           status: newStatus
         })
       });
-      fetchOrders();
+
+      if (!res.ok) {
+        throw new Error(`Server status ${res.status}`);
+      }
+
+      if (mutateOrders) {
+        mutateOrders();
+      }
     } catch (e) {
       console.error('Failed to update step status:', e);
-    }
-  };
 
-  const handleDelete = async (id: number) => {
+      // 3. Rollback on error & show Toast Error Notification
+      if (snapshotOrders.length > 0) {
+        setOrders(snapshotOrders);
+        if (mutateOrders) {
+          mutateOrders((currentData: any) => currentData ? { ...currentData, orders: snapshotOrders } : currentData, false);
+        }
+      }
+
+      notifications.show({
+        title: '공정 스텝 변경 실패',
+        message: '서버/DB 저장을 완료하지 못하여 이전 상태로 롤백 되었습니다.',
+        color: 'red',
+        autoClose: 4000
+      });
+    }
+  }, [canEdit, mutateOrders]);
+
+  const handleDelete = useCallback(async (id: number) => {
     if (!canEdit) {
       alert('직원 권한(1234)은 수주 삭제가 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
       return;
     }
     if (confirm('이 수주 건을 삭제하시겠습니까?')) {
-      await fetch(`/api/orders/${id}`, { method: 'DELETE' });
-      fetchOrders();
+      setOrders(prev => prev.filter(o => o.id !== id));
+      try {
+        const res = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete error');
+        if (mutateOrders) mutateOrders();
+      } catch (e) {
+        notifications.show({
+          title: '삭제 실패',
+          message: '수주 삭제 처리 중 오류가 발생했습니다.',
+          color: 'red'
+        });
+        if (mutateOrders) mutateOrders();
+      }
     }
-  };
+  }, [canEdit, mutateOrders]);
 
-  const handlePrintPartnerInvoice = (partner: PartnerDetail, order?: Order | null) => {
+  const handlePrintPartnerInvoice = useCallback((partner: PartnerDetail, order?: Order | null) => {
     setPrintInvoicePartner(partner);
     setPrintInvoiceOrder(order || null);
     setTimeout(() => {
       window.print();
     }, 150);
-  };
+  }, []);
 
-  const handlePrintSingleOrderInvoice = (order: Order) => {
+  const handlePrintSingleOrderInvoice = useCallback((order: Order) => {
     const partner = allPartners.find(p => p.name === order.partnerName) || {
       id: 0,
       name: order.partnerName,
@@ -500,7 +537,7 @@ export default function OrdersPage() {
     setTimeout(() => {
       window.print();
     }, 150);
-  };
+  }, [allPartners]);
 
   const metrics = useMemo(() => {
     const totalCount = orders.length;
@@ -582,7 +619,7 @@ export default function OrdersPage() {
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   const docId = useMemo(() => Date.now().toString().slice(-6), []);
 
-  const handleExportExcel = () => {
+  const handleExportExcel = useCallback(() => {
     const exportData = filteredOrders.map(o => {
       const activeSteps = (o.steps || []).filter(s => s.active);
       const inProgressStep = activeSteps.find(s => s.status === '진행중');
@@ -607,15 +644,15 @@ export default function OrdersPage() {
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     worksheet['!cols'] = [
-      { wch: 10 }, // 상태
-      { wch: 20 }, // 거래처명
-      { wch: 25 }, // 품목명
-      { wch: 8 },  // 수량
-      { wch: 12 }, // 발주일
-      { wch: 12 }, // 납기일
-      { wch: 12 }, // 진척도(%)
-      { wch: 22 }, // 현재 공정 단계
-      { wch: 30 }, // 비고
+      { wch: 10 },
+      { wch: 20 },
+      { wch: 25 },
+      { wch: 8 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 22 },
+      { wch: 30 },
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -623,7 +660,7 @@ export default function OrdersPage() {
 
     const dateStr = new Date().toISOString().split('T')[0];
     XLSX.writeFile(workbook, `TASS_공정현황_${dateStr}.xlsx`);
-  };
+  }, [filteredOrders]);
 
   return (
     <>
@@ -910,7 +947,7 @@ export default function OrdersPage() {
             </div>
           </Paper>
         ) : (
-          /* 공정 진척도 관리 테이블 */
+          /* 공정 진척도 관리 테이블 (OrderRow Component Memoized) */
           <div className="glass-panel table-responsive-container" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <Table striped highlightOnHover withTableBorder verticalSpacing="md">
               <Table.Thead>
@@ -965,127 +1002,19 @@ export default function OrdersPage() {
                   const isUrgent = o.status !== '완료' && daysLeft !== null && daysLeft <= 2;
 
                   return (
-                    <Table.Tr 
+                    <OrderRow
                       key={o.id}
-                      style={{
-                        backgroundColor: isUrgent ? 'rgba(254, 226, 226, 0.40)' : undefined
-                      }}
-                    >
-                      <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                        <Badge 
-                          color={o.status === '완료' ? 'green' : isUrgent ? 'red' : 'blue'} 
-                          variant={isUrgent ? 'filled' : 'light'}
-                          size="md"
-                        >
-                          {isUrgent ? '납기임박' : o.status}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Tooltip label="거래처 상세 정보 보기">
-                          <Text 
-                            fw={700} 
-                            c="blue.7"
-                            style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                            onClick={() => handleShowPartnerDetail(o.partnerName, o)}
-                          >
-                            {o.partnerName}
-                          </Text>
-                        </Tooltip>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text fw={600}>{o.itemName}</Text>
-                        <Text size="xs" c="dimmed">{o.quantity}개</Text>
-                      </Table.Td>
-                      <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                        <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{o.orderDate || '-'}</Text>
-                      </Table.Td>
-                      <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                        <Group gap={4} wrap="nowrap" align="center">
-                          <Text 
-                            size="sm" 
-                            fw={isUrgent ? 900 : 600} 
-                            color={isUrgent ? 'red.7' : 'dark'}
-                            style={{ whiteSpace: 'nowrap' }}
-                          >
-                            {o.dueDate || '-'}
-                          </Text>
-                          {isUrgent && (
-                            <Badge 
-                              color="red" 
-                              variant="filled" 
-                              size="xs"
-                              style={{ fontWeight: 800 }}
-                            >
-                              {daysLeft! < 0 ? `D+${Math.abs(daysLeft!)}` : daysLeft === 0 ? 'D-Day' : `D-${daysLeft}`}
-                            </Badge>
-                          )}
-                        </Group>
-                      </Table.Td>
-                    <Table.Td>
-                      <Stack gap="xs">
-                        {/* 프로그레스 바 */}
-                        <Group justify="space-between" gap="xs">
-                          <Progress 
-                            value={o.progressPercent} 
-                            color={o.progressPercent === 100 ? 'teal' : 'blue'} 
-                            size="lg" 
-                            radius="xl" 
-                            animated={o.progressPercent > 0 && o.progressPercent < 100}
-                            style={{ flex: 1 }}
-                          />
-                          <Text size="xs" fw={800} c={o.progressPercent === 100 ? 'teal' : 'blue'}>
-                            {o.progressPercent}% 완료
-                          </Text>
-                        </Group>
-
-                        {/* 공정 스텝 라이브 체크 뱃지 목록 (플랫 미니멀 스타일) */}
-                        <Group gap={4} wrap="wrap">
-                          {(o.steps || []).filter(s => s.active).map(s => (
-                            <Badge
-                              key={s.name}
-                              size="sm"
-                              radius="sm"
-                              variant={s.status === '완료' ? 'light' : s.status === '진행중' ? 'filled' : 'outline'}
-                              color={s.status === '완료' ? 'dark' : s.status === '진행중' ? 'blue' : 'gray.4'}
-                              onClick={() => handleToggleStep(o, s.name)}
-                              style={{ 
-                                cursor: 'pointer', 
-                                userSelect: 'none', 
-                                textTransform: 'none', 
-                                fontWeight: 600,
-                                paddingLeft: '6px',
-                                paddingRight: '6px',
-                                height: '22px'
-                              }}
-                            >
-                              {s.status === '완료' ? `✓ ${s.name} 완료` : s.status === '진행중' ? `▶ ${s.name} 진행중` : s.name}
-                            </Badge>
-                          ))}
-                        </Group>
-                      </Stack>
-                    </Table.Td>
-                      <Table.Td>
-                        <Group gap={4} wrap="nowrap">
-                          <Tooltip label="수정">
-                            <ActionIcon color="dark" variant="subtle" size="sm" onClick={() => handleOpenEdit(o)}>
-                              <IconPencil size={17} />
-                            </ActionIcon>
-                          </Tooltip>
-                          <Tooltip label="선택 품목 거래명세표/송장 인쇄">
-                            <ActionIcon color="indigo.6" variant="subtle" size="sm" onClick={() => handlePrintSingleOrderInvoice(o)}>
-                              <IconPrinter size={17} />
-                            </ActionIcon>
-                          </Tooltip>
-                          <Tooltip label="삭제">
-                            <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleDelete(o.id)}>
-                              <IconTrash size={17} />
-                            </ActionIcon>
-                          </Tooltip>
-                        </Group>
-                      </Table.Td>
-                  </Table.Tr>
-                );
-              })}
+                      order={o}
+                      daysLeft={daysLeft}
+                      isUrgent={isUrgent}
+                      onToggleStep={handleToggleStep}
+                      onOpenEdit={handleOpenEdit}
+                      onDelete={handleDelete}
+                      onShowPartnerDetail={handleShowPartnerDetail}
+                      onPrintSingleOrderInvoice={handlePrintSingleOrderInvoice}
+                    />
+                  );
+                })}
 
                 {filteredOrders.length === 0 && (
                   <Table.Tr>

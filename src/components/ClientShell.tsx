@@ -153,7 +153,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         <NavLink
           component={Link}
           href="/support-projects"
-          label="🏛️ 나라 지원사업 공고"
+          label="나라 지원사업 공고"
           leftSection={<IconBuildingBank size="1.1rem" stroke={1.5} />}
           active={pathname === '/support-projects'}
           onClick={handleNavClick}
@@ -171,7 +171,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         <NavLink
           component={Link}
           href="/equipment"
-          label="🛠️ 장비/설비 관리"
+          label="장비/설비 관리"
           leftSection={<IconTools size="1.1rem" stroke={1.5} />}
           active={pathname === '/equipment'}
           onClick={handleNavClick}

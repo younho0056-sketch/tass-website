@@ -84,13 +84,13 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             
             {/* 권한 상태 표시 배지 */}
             {isAuthenticated ? (
-              <Group gap="xs">
+              <Group gap="xs" align="center">
                 {role === 'admin' ? (
-                  <Badge color="blue" size="md" variant="filled" leftSection={<IconKey size={12} />}>
+                  <Badge color="blue" size="md" variant="filled" radius="md" leftSection={<IconKey size={12} />} style={{ borderRadius: '6px' }}>
                     🔑 관리자 (수정권한)
                   </Badge>
                 ) : (
-                  <Badge color="teal" size="md" variant="filled">
+                  <Badge color="teal" size="md" variant="filled" radius="md" style={{ borderRadius: '6px' }}>
                     👁️ 직원 (조회/출력)
                   </Badge>
                 )}
@@ -98,8 +98,10 @@ export default function ClientShell({ children }: { children: React.ReactNode })
                   size="xs" 
                   variant="subtle" 
                   color="gray.4" 
+                  radius="md"
                   onClick={logout}
                   leftSection={<IconLogout size={14} />}
+                  style={{ borderRadius: '6px' }}
                 >
                   로그아웃
                 </Button>
@@ -108,8 +110,10 @@ export default function ClientShell({ children }: { children: React.ReactNode })
               <Button 
                 size="xs" 
                 color="blue" 
+                radius="md"
                 onClick={() => openAuthModal(pathname)}
                 leftSection={<IconLock size={14} />}
+                style={{ borderRadius: '6px' }}
               >
                 비밀번호 입력
               </Button>

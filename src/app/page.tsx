@@ -93,11 +93,11 @@ export default function LandingPage() {
         </Group>
 
         {/* GNB Navigation Links: [회사소개 / 주요파트너사] -> [주요제품] -> [고객지원] */}
-        <Group gap="xl" visibleFrom="sm">
+        <Group gap="xl" visibleFrom="sm" align="center">
           <Text 
             c="white" 
             fw={700} 
-            style={{ cursor: 'pointer', opacity: 0.9, transition: 'opacity 0.2s' }} 
+            style={{ cursor: 'pointer', opacity: 0.9, transition: 'opacity 0.2s', display: 'inline-flex', alignItems: 'center' }} 
             onClick={() => scrollToSection(aboutSectionRef)}
           >
             회사소개 / 주요파트너사
@@ -105,7 +105,7 @@ export default function LandingPage() {
           <Text 
             c="white" 
             fw={700} 
-            style={{ cursor: 'pointer', opacity: 0.9, transition: 'opacity 0.2s' }} 
+            style={{ cursor: 'pointer', opacity: 0.9, transition: 'opacity 0.2s', display: 'inline-flex', alignItems: 'center' }} 
             onClick={() => scrollToSection(productsSectionRef)}
           >
             주요제품
@@ -113,24 +113,27 @@ export default function LandingPage() {
           <Text 
             c="white" 
             fw={700} 
-            style={{ cursor: 'pointer', opacity: 0.9, transition: 'opacity 0.2s' }} 
+            style={{ cursor: 'pointer', opacity: 0.9, transition: 'opacity 0.2s', display: 'inline-flex', alignItems: 'center' }} 
             onClick={() => scrollToSection(supportSectionRef)}
           >
             고객지원
           </Text>
           
-          <PWAInstallButton variant="header" />
-          
-          <Button 
-            color="blue.6" 
-            variant="filled" 
-            radius="xl" 
-            size="sm" 
-            rightSection={<IconArrowRight size={15} />}
-            onClick={() => handleNavTarget('/partners')}
-          >
-            관리자 시스템 접속
-          </Button>
+          <Group gap="md" align="center">
+            <PWAInstallButton variant="header" />
+            
+            <Button 
+              color="blue.6" 
+              variant="filled" 
+              radius="md" 
+              size="sm" 
+              rightSection={<IconArrowRight size={15} />}
+              onClick={() => handleNavTarget('/partners')}
+              style={{ borderRadius: '6px', fontWeight: 700 }}
+            >
+              관리자 시스템 접속
+            </Button>
+          </Group>
         </Group>
       </header>
 

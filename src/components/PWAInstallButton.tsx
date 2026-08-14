@@ -75,9 +75,21 @@ export default function PWAInstallButton({ variant = 'header' }: { variant?: 'he
         <Badge
           color="green"
           variant="light"
-          size="lg"
+          size="md"
+          radius="md"
           leftSection={<IconCheck size={14} />}
-          style={{ cursor: 'default', textTransform: 'none', padding: '16px 12px' }}
+          style={{ 
+            cursor: 'default', 
+            textTransform: 'none', 
+            height: '32px',
+            borderRadius: '6px',
+            fontWeight: 700,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingLeft: '10px',
+            paddingRight: '10px'
+          }}
         >
           PC 앱 실행 중
         </Badge>
@@ -90,7 +102,7 @@ export default function PWAInstallButton({ variant = 'header' }: { variant?: 'he
       <Tooltip label="클릭하여 바탕화면 및 작업표시줄에 TASS PC 앱 설치" position="bottom" withArrow>
         <Button
           onClick={handleInstallClick}
-          size={variant === 'hero' ? 'md' : 'xs'}
+          size={variant === 'hero' ? 'md' : 'sm'}
           radius="md"
           variant="gradient"
           gradient={{ from: 'blue', to: 'indigo', deg: 90 }}
@@ -98,6 +110,7 @@ export default function PWAInstallButton({ variant = 'header' }: { variant?: 'he
           style={{
             boxShadow: '0 2px 10px rgba(37, 99, 235, 0.3)',
             fontWeight: 700,
+            borderRadius: '6px',
             transition: 'transform 0.2s ease, box-shadow 0.2s ease',
           }}
         >

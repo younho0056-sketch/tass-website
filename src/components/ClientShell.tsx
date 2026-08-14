@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { AppShell, Burger, Group, NavLink, Title, Text, Box, Badge, Button, Paper, Stack, Center } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet, IconBuildingBank, IconLock, IconLogout, IconKey } from '@tabler/icons-react';
+import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet, IconBuildingBank, IconLock, IconLogout, IconKey, IconTools } from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import BgmPlayer from '@/components/BgmPlayer';
@@ -165,6 +165,15 @@ export default function ClientShell({ children }: { children: React.ReactNode })
           label="송장 출력"
           leftSection={<IconPrinter size="1.1rem" stroke={1.5} />}
           active={pathname === '/labels'}
+          onClick={handleNavClick}
+          style={{ borderRadius: '8px', marginBottom: '4px' }}
+        />
+        <NavLink
+          component={Link}
+          href="/equipment"
+          label="🛠️ 장비/설비 관리"
+          leftSection={<IconTools size="1.1rem" stroke={1.5} />}
+          active={pathname === '/equipment'}
           onClick={handleNavClick}
           style={{ borderRadius: '8px', marginBottom: '4px' }}
         />

@@ -577,37 +577,27 @@ export default function EquipmentPage() {
                     <Text size="xs" c="dimmed" fw={700}>₩{eq.purchasePrice.toLocaleString()}</Text>
                   </Table.Td>
                   <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                    <Button
-                      size="xs"
-                      radius="xl"
-                      color={eq.status === 'OPERATIONAL' ? 'teal' : 'red'}
-                      variant={eq.status === 'OPERATIONAL' ? 'light' : 'filled'}
-                      leftSection={eq.status === 'OPERATIONAL' ? <IconCheck size={14} /> : <IconAlertTriangle size={14} />}
+                    <Text
+                      size="sm"
+                      fw={eq.status === 'OPERATIONAL' ? 600 : 800}
+                      c={eq.status === 'OPERATIONAL' ? 'dark' : 'red.7'}
+                      style={{ cursor: 'pointer', userSelect: 'none' }}
                       onClick={() => handleToggleStatus(eq)}
-                      style={{ fontWeight: 800 }}
                     >
-                      {eq.status === 'OPERATIONAL' ? '🟢 정상 가동' : '🔴 고장/수리중'}
-                    </Button>
+                      {eq.status === 'OPERATIONAL' ? '정상 가동' : '고장/수리중'}
+                    </Text>
                   </Table.Td>
                   <Table.Td style={{ whiteSpace: 'nowrap' }}>
                     <Stack gap={2}>
-                      <Group gap={4}>
-                        <Badge size="xs" color={eq.downtimeCount > 0 ? 'red' : 'gray'} variant="light">
-                          비가동 {eq.downtimeCount}회
-                        </Badge>
-                        <Tooltip label="수리/소모품 이력 목록 전체보기">
-                          <Badge 
-                            size="xs" 
-                            color="orange" 
-                            variant="filled" 
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => handleOpenHistory(eq)}
-                          >
-                            이력 {eq.repairs.length}건
-                          </Badge>
-                        </Tooltip>
-                      </Group>
-                      <Text size="11px" fw={800} c={eq.totalRepairCost > 0 ? 'orange.8' : 'dimmed'}>
+                      <Text 
+                        size="xs" 
+                        c="dark"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => handleOpenHistory(eq)}
+                      >
+                        비가동 {eq.downtimeCount}회 (이력 {eq.repairs.length}건)
+                      </Text>
+                      <Text size="xs" c={eq.totalRepairCost > 0 ? 'dark' : 'dimmed'} fw={eq.totalRepairCost > 0 ? 600 : 400}>
                         누적 ₩{eq.totalRepairCost.toLocaleString()}
                       </Text>
                     </Stack>

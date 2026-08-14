@@ -13,7 +13,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { 
   IconPlus, IconSearch, 
   IconPhone, IconMail, IconPrinter, IconDownload,
-  IconChevronLeft, IconChevronRight, IconCompass
+  IconChevronLeft, IconChevronRight, IconFolderOpen
 } from '@tabler/icons-react';
 import * as XLSX from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
@@ -643,14 +643,14 @@ export default function OrdersPage() {
             variant="outline" 
             color="gray.0" 
             size="sm"
-            leftSection={<IconCompass size={16} />}
+            leftSection={<IconFolderOpen size={16} />}
             component="a"
             href={DEFAULT_DRIVE_URL}
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.7)', fontWeight: 700 }}
           >
-            📐 도면 드라이브 저장소
+            도면 드라이브 저장소
           </Button>
           <Button 
             variant="outline" 

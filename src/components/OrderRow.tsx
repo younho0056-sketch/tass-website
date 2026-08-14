@@ -89,9 +89,7 @@ const OrderRow = memo(function OrderRow({
         </Tooltip>
       </Table.Td>
       <Table.Td style={{ whiteSpace: 'nowrap' }}>
-        <Badge color="indigo.7" variant="light" size="sm" style={{ fontFamily: 'monospace', fontWeight: 800 }}>
-          {displayProjectNo}
-        </Badge>
+        <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{displayProjectNo}</Text>
       </Table.Td>
       <Table.Td>
         <Text fw={600}>{order.itemName}</Text>

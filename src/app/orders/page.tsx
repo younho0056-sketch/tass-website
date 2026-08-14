@@ -13,7 +13,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { 
   IconPlus, IconSearch, 
   IconPhone, IconMail, IconPrinter, IconDownload,
-  IconChevronLeft, IconChevronRight
+  IconChevronLeft, IconChevronRight, IconCompass
 } from '@tabler/icons-react';
 import * as XLSX from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
@@ -48,6 +48,7 @@ function getDaysRemaining(dueDateStr: string | null | undefined): number | null 
 }
 
 const DEFAULT_STEPS = ['설계', '절단', '가공', '용접', '도장', '조립/납품'];
+const DEFAULT_DRIVE_URL = 'https://drive.google.com/drive/folders/13kS6BLYxlVlTlydnv7DGBrU3jG5kjsAZ?usp=sharing';
 
 type SortField = 'partnerName' | 'orderDate' | 'dueDate' | 'progressPercent';
 type SortOrder = 'asc' | 'desc';
@@ -164,6 +165,8 @@ export default function OrdersPage() {
   const [printInvoiceOrder, setPrintInvoiceOrder] = useState<Order | null>(null);
 
   // Form State
+  const [projectNo, setProjectNo] = useState('');
+  const [drawingUrl, setDrawingUrl] = useState('');
   const [partnerName, setPartnerName] = useState('');
   const [itemName, setItemName] = useState('');
   const [quantity, setQuantity] = useState<number | string>(1);
@@ -214,6 +217,18 @@ export default function OrdersPage() {
   }, [allPartners, partnerName]);
 
   const resetForm = useCallback(() => {
+    let nextNum = orders.length + 1;
+    orders.forEach(o => {
+      if (o.projectNo && o.projectNo.startsWith('PRJ-')) {
+        const numPart = parseInt(o.projectNo.replace('PRJ-', ''), 10);
+        if (!isNaN(numPart) && numPart >= nextNum) {
+          nextNum = numPart + 1;
+        }
+      }
+    });
+
+    setProjectNo(`PRJ-${String(nextNum).padStart(3, '0')}`);
+    setDrawingUrl('');
     setPartnerName('');
     setItemName('');
     setQuantity(1);
@@ -222,7 +237,7 @@ export default function OrdersPage() {
     setMemo('');
     setActiveStepNames(DEFAULT_STEPS);
     setEditingOrder(null);
-  }, []);
+  }, [orders]);
 
   const { canEdit } = useAuth();
 
@@ -241,6 +256,8 @@ export default function OrdersPage() {
       return;
     }
     setEditingOrder(order);
+    setProjectNo(order.projectNo || `PRJ-${String(order.id).padStart(3, '0')}`);
+    setDrawingUrl(order.drawingUrl || '');
     setPartnerName(order.partnerName);
     setItemName(order.itemName);
     setQuantity(order.quantity);
@@ -298,6 +315,8 @@ export default function OrdersPage() {
     });
 
     const bodyData = {
+      projectNo,
+      drawingUrl,
       partnerName,
       itemName,
       quantity,
@@ -329,7 +348,7 @@ export default function OrdersPage() {
     } catch (err) {
       alert('요청 처리 중 오류가 발생했습니다.');
     }
-  }, [canEdit, activeStepNames, editingOrder, partnerName, itemName, quantity, orderDate, dueDate, memo, close, resetForm, mutateOrders]);
+  }, [canEdit, activeStepNames, editingOrder, projectNo, drawingUrl, partnerName, itemName, quantity, orderDate, dueDate, memo, close, resetForm, mutateOrders]);
 
   // Optimistic Update with instant 0ms state mutation, auto date (M/D) recording, and background API call + rollback on error
   const handleToggleStep = useCallback(async (order: Order, stepName: string) => {
@@ -493,7 +512,11 @@ export default function OrdersPage() {
 
   const filteredOrders = useMemo(() => {
     const filtered = orders.filter(o => {
-      const matchSearch = o.partnerName.includes(search) || o.itemName.includes(search);
+      const pNo = o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`;
+      const matchSearch = 
+        o.partnerName.includes(search) || 
+        o.itemName.includes(search) ||
+        pNo.toLowerCase().includes(search.toLowerCase());
       
       let matchTab = true;
       if (tabFilter === 'IN_PROGRESS') {
@@ -573,6 +596,7 @@ export default function OrdersPage() {
         .join(' ➔ ');
 
       return {
+        '프로젝트 번호': o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`,
         '상태': o.status,
         '거래처명': o.partnerName,
         '품목명': o.itemName,
@@ -582,12 +606,14 @@ export default function OrdersPage() {
         '진척도(%)': `${o.progressPercent}%`,
         '현재 공정 단계': currentStage,
         '전체 공정 이력 (날짜)': stepsHistoryStr,
+        '도면 링크': o.drawingUrl || DEFAULT_DRIVE_URL,
         '비고': o.memo || '-'
       };
     });
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     worksheet['!cols'] = [
+      { wch: 15 },
       { wch: 10 },
       { wch: 20 },
       { wch: 25 },
@@ -596,6 +622,7 @@ export default function OrdersPage() {
       { wch: 12 },
       { wch: 12 },
       { wch: 22 },
+      { wch: 35 },
       { wch: 35 },
       { wch: 30 },
     ];
@@ -612,6 +639,19 @@ export default function OrdersPage() {
       {/* SCREEN VIEW (Hidden during print) */}
       <Stack gap="lg" className="print:hidden print-hidden no-print">
         <PageHeaderBanner title="수주 및 공정 진척 관리" subtitle="TASS 생산 공정 현황 모니터링 및 현장 지시용 A4 가로 공정표 인쇄">
+          <Button 
+            variant="outline" 
+            color="gray.0" 
+            size="sm"
+            leftSection={<IconCompass size={16} />}
+            component="a"
+            href={DEFAULT_DRIVE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#ffffff', borderColor: 'rgba(255, 255, 255, 0.7)', fontWeight: 700 }}
+          >
+            📐 도면 드라이브 저장소
+          </Button>
           <Button 
             variant="outline" 
             color="gray.0" 
@@ -662,7 +702,7 @@ export default function OrdersPage() {
         {/* 검색 & 상세 상태 필터 */}
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md" className="glass-panel" p="md">
           <TextInput 
-            placeholder="거래처명 또는 품목명 검색..." 
+            placeholder="거래처명, 품목명, 프로젝트 번호(PRJ-XXX) 검색..." 
             value={search} 
             onChange={(e) => setSearch(e.currentTarget.value)} 
             leftSection={<IconSearch size={16} />}
@@ -829,6 +869,7 @@ export default function OrdersPage() {
                                   const daysLeft = getDaysRemaining(o.dueDate);
                                   const isCompleted = o.status === '완료';
                                   const isUrgent = !isCompleted && daysLeft !== null && daysLeft <= 2;
+                                  const pNo = o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`;
 
                                   let prefix = '📦 [발주]';
                                   let badgeColor = 'blue';
@@ -850,7 +891,7 @@ export default function OrdersPage() {
                                   return (
                                     <Tooltip
                                       key={`${o.id}-${cell.dateStr}`}
-                                      label={`[${o.partnerName}] ${o.itemName} (${o.quantity}개) | 현재상태: ${o.status} (${o.progressPercent}%)`}
+                                      label={`[${pNo}] ${o.partnerName} - ${o.itemName} (${o.quantity}개) | 현재상태: ${o.status} (${o.progressPercent}%)`}
                                       multiline
                                       w={220}
                                     >
@@ -886,7 +927,7 @@ export default function OrdersPage() {
                                           </Badge>
                                         </Group>
                                         <Text size="10px" c="gray.6" truncate="end" mt={2}>
-                                          🏢 {o.partnerName}
+                                          [{pNo}] 🏢 {o.partnerName}
                                         </Text>
                                       </Paper>
                                     </Tooltip>
@@ -920,6 +961,7 @@ export default function OrdersPage() {
                       {renderSortIcon('partnerName')}
                     </Group>
                   </Table.Th>
+                  <Table.Th w={110} style={{ whiteSpace: 'nowrap' }}>프로젝트 번호</Table.Th>
                   <Table.Th w={130}>품목/수량</Table.Th>
                   <Table.Th 
                     w={110} 
@@ -950,7 +992,7 @@ export default function OrdersPage() {
                       {renderSortIcon('progressPercent')}
                     </Group>
                   </Table.Th>
-                  <Table.Th w={90} style={{ whiteSpace: 'nowrap' }}>작업</Table.Th>
+                  <Table.Th w={110} style={{ whiteSpace: 'nowrap' }}>작업</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -975,7 +1017,7 @@ export default function OrdersPage() {
 
                 {filteredOrders.length === 0 && (
                   <Table.Tr>
-                    <Table.Td colSpan={7} ta="center" py="xl" c="dimmed">
+                    <Table.Td colSpan={8} ta="center" py="xl" c="dimmed">
                       조건에 일치하는 수주 건이 없습니다.
                     </Table.Td>
                   </Table.Tr>
@@ -996,15 +1038,25 @@ export default function OrdersPage() {
         >
           <form onSubmit={handleSubmit}>
             <Stack gap="md">
-              <Select
-                label="거래처 선택"
-                placeholder="거래처를 선택하거나 검색하세요"
-                data={selectPartnerData}
-                value={partnerName}
-                onChange={(val) => setPartnerName(val || '')}
-                searchable
-                required
-              />
+              <Group grow>
+                <TextInput 
+                  label="프로젝트 번호 (Project No.)" 
+                  placeholder="예: PRJ-024" 
+                  value={projectNo} 
+                  onChange={(e) => setProjectNo(e.currentTarget.value)} 
+                  required 
+                />
+                <Select
+                  label="거래처 선택"
+                  placeholder="거래처를 선택하거나 검색하세요"
+                  data={selectPartnerData}
+                  value={partnerName}
+                  onChange={(val) => setPartnerName(val || '')}
+                  searchable
+                  required
+                />
+              </Group>
+
               <Group grow>
                 <TextInput 
                   label="품목명" 
@@ -1021,6 +1073,7 @@ export default function OrdersPage() {
                   onChange={setQuantity} 
                 />
               </Group>
+              
               <Group grow>
                 <TextInput 
                   label="발주일" 
@@ -1037,6 +1090,13 @@ export default function OrdersPage() {
                   onChange={(e) => setDueDate(e.currentTarget.value)} 
                 />
               </Group>
+
+              <TextInput 
+                label="개별 도면 / 사진 구글 드라이브 링크 (선택)" 
+                placeholder="https://drive.google.com/file/d/..." 
+                value={drawingUrl} 
+                onChange={(e) => setDrawingUrl(e.currentTarget.value)} 
+              />
 
               <Text size="sm" fw={600} mt="xs">적용할 공정 단계 선택 (미진행 공정 제외 가능):</Text>
               <Group gap="md">
@@ -1139,7 +1199,7 @@ export default function OrdersPage() {
                   <Group gap="xs" p="xs" style={{ backgroundColor: 'rgba(59, 130, 246, 0.08)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
                     <Badge color="blue" size="sm">선택 수주 품목 지정됨</Badge>
                     <Text size="xs" fw={700} c="blue.9">
-                      {selectedOrderForInvoice.itemName} ({selectedOrderForInvoice.quantity}개 / 납기: {selectedOrderForInvoice.dueDate || '-'})
+                      [{selectedOrderForInvoice.projectNo || `PRJ-${String(selectedOrderForInvoice.id).padStart(3, '0')}`}] {selectedOrderForInvoice.itemName} ({selectedOrderForInvoice.quantity}개 / 납기: {selectedOrderForInvoice.dueDate || '-'})
                     </Text>
                   </Group>
                 )}
@@ -1233,6 +1293,7 @@ export default function OrdersPage() {
                 <thead>
                   <tr style={{ backgroundColor: '#f1f5f9' }}>
                     <th style={{ border: '1px solid #000', padding: '2mm' }}>순번</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>프로젝트 번호</th>
                     <th style={{ border: '1px solid #000', padding: '2mm' }}>품목명</th>
                     <th style={{ border: '1px solid #000', padding: '2mm' }}>수량</th>
                     <th style={{ border: '1px solid #000', padding: '2mm' }}>발주일</th>
@@ -1244,6 +1305,7 @@ export default function OrdersPage() {
                   {(printInvoiceOrder ? [printInvoiceOrder] : orders.filter(o => o.partnerName === printInvoicePartner.name)).map((item, idx) => (
                     <tr key={item.id}>
                       <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{idx + 1}</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center', fontWeight: 'bold' }}>{item.projectNo || `PRJ-${String(item.id).padStart(3, '0')}`}</td>
                       <td style={{ border: '1px solid #000', padding: '2mm', fontWeight: 'bold' }}>{item.itemName}</td>
                       <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.quantity}개</td>
                       <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.orderDate || '-'}</td>
@@ -1253,7 +1315,7 @@ export default function OrdersPage() {
                   ))}
                   {(printInvoiceOrder ? [printInvoiceOrder] : orders.filter(o => o.partnerName === printInvoicePartner.name)).length === 0 && (
                     <tr>
-                      <td colSpan={6} style={{ border: '1px solid #000', padding: '3mm', textAlign: 'center', color: '#666' }}>
+                      <td colSpan={7} style={{ border: '1px solid #000', padding: '3mm', textAlign: 'center', color: '#666' }}>
                         해당 거래처의 수주 내역이 존재하지 않습니다.
                       </td>
                     </tr>
@@ -1318,6 +1380,7 @@ export default function OrdersPage() {
                               const daysLeft = getDaysRemaining(o.dueDate);
                               const isUrgent = !isCompleted && daysLeft !== null && daysLeft <= 2;
                               const tag = isCompleted ? '[완료]' : isUrgent ? '[🚨납기]' : isDueDate ? '[🚚납품]' : '[📦발주]';
+                              const pNo = o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`;
                               
                               return (
                                 <div
@@ -1331,7 +1394,7 @@ export default function OrdersPage() {
                                     backgroundColor: isCompleted ? '#e6f4ea' : isUrgent ? '#fce8e6' : '#e8f0fe'
                                   }}
                                 >
-                                  <strong>{tag}</strong> {o.itemName} ({o.quantity}개)
+                                  <strong>{tag}</strong> [{pNo}] {o.itemName} ({o.quantity}개)
                                 </div>
                               );
                             })}
@@ -1358,14 +1421,15 @@ export default function OrdersPage() {
           <table className="orders-print-table">
             <thead>
               <tr>
-                <th style={{ width: '5%', whiteSpace: 'nowrap' }}>순번</th>
-                <th style={{ width: '7%', whiteSpace: 'nowrap' }}>상태</th>
-                <th style={{ width: '14%' }}>거래처명</th>
-                <th style={{ width: '15%' }}>품목/수량</th>
-                <th style={{ width: '11%', whiteSpace: 'nowrap' }}>발주일</th>
-                <th style={{ width: '11%', whiteSpace: 'nowrap' }}>납기일</th>
-                <th style={{ width: '6%', whiteSpace: 'nowrap' }}>진척율</th>
-                <th style={{ width: '31%' }}>공정 단계 현황</th>
+                <th style={{ width: '4%', whiteSpace: 'nowrap' }}>순번</th>
+                <th style={{ width: '6%', whiteSpace: 'nowrap' }}>상태</th>
+                <th style={{ width: '13%' }}>거래처명</th>
+                <th style={{ width: '10%', whiteSpace: 'nowrap' }}>프로젝트 번호</th>
+                <th style={{ width: '14%' }}>품목/수량</th>
+                <th style={{ width: '10%', whiteSpace: 'nowrap' }}>발주일</th>
+                <th style={{ width: '10%', whiteSpace: 'nowrap' }}>납기일</th>
+                <th style={{ width: '5%', whiteSpace: 'nowrap' }}>진척율</th>
+                <th style={{ width: '28%' }}>공정 단계 현황</th>
               </tr>
             </thead>
             <tbody>
@@ -1381,6 +1445,7 @@ export default function OrdersPage() {
                     </span>
                   </td>
                   <td><strong>{o.partnerName}</strong></td>
+                  <td style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>{o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`}</td>
                   <td>{o.itemName} ({o.quantity}개)</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{o.orderDate || '-'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{o.dueDate || '-'}</td>
@@ -1416,7 +1481,7 @@ export default function OrdersPage() {
               ))}
               {filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ padding: '8mm', textAlign: 'center' }}>
+                  <td colSpan={9} style={{ padding: '8mm', textAlign: 'center' }}>
                     출력할 수주/공정 현황 데이터가 없습니다.
                   </td>
                 </tr>

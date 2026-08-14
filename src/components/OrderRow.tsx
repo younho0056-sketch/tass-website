@@ -2,7 +2,7 @@
 
 import React, { memo } from 'react';
 import { Table, Badge, Tooltip, Text, Group, Stack, Progress, ActionIcon } from '@mantine/core';
-import { IconPencil, IconPrinter, IconTrash } from '@tabler/icons-react';
+import { IconPencil, IconPrinter, IconTrash, IconCompass } from '@tabler/icons-react';
 
 export type ProcessStep = {
   name: string;
@@ -13,6 +13,8 @@ export type ProcessStep = {
 
 export type Order = {
   id: number;
+  projectNo?: string | null;
+  drawingUrl?: string | null;
   partnerName: string;
   partnerId: number | null;
   itemName: string;
@@ -38,6 +40,8 @@ interface OrderRowProps {
   onPrintSingleOrderInvoice: (order: Order) => void;
 }
 
+const DEFAULT_DRIVE_URL = 'https://drive.google.com/drive/folders/13kS6BLYxlVlTlydnv7DGBrU3jG5kjsAZ?usp=sharing';
+
 const OrderRow = memo(function OrderRow({
   order,
   daysLeft,
@@ -48,6 +52,15 @@ const OrderRow = memo(function OrderRow({
   onShowPartnerDetail,
   onPrintSingleOrderInvoice
 }: OrderRowProps) {
+  const displayProjectNo = order.projectNo || `PRJ-${String(order.id).padStart(3, '0')}`;
+
+  const handleOpenDrawing = () => {
+    const targetUrl = order.drawingUrl && order.drawingUrl.trim() 
+      ? order.drawingUrl.trim() 
+      : DEFAULT_DRIVE_URL;
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <Table.Tr 
       style={{
@@ -74,6 +87,11 @@ const OrderRow = memo(function OrderRow({
             {order.partnerName}
           </Text>
         </Tooltip>
+      </Table.Td>
+      <Table.Td style={{ whiteSpace: 'nowrap' }}>
+        <Badge color="indigo.7" variant="light" size="sm" style={{ fontFamily: 'monospace', fontWeight: 800 }}>
+          {displayProjectNo}
+        </Badge>
       </Table.Td>
       <Table.Td>
         <Text fw={600}>{order.itemName}</Text>
@@ -153,6 +171,11 @@ const OrderRow = memo(function OrderRow({
       </Table.Td>
       <Table.Td>
         <Group gap={4} wrap="nowrap">
+          <Tooltip label={order.drawingUrl && order.drawingUrl.trim() ? "개별 도면/사진 드라이브 열기" : "메인 도면 드라이브 저장소 열기"}>
+            <ActionIcon color={order.drawingUrl && order.drawingUrl.trim() ? "teal.7" : "blue.6"} variant="light" size="sm" onClick={handleOpenDrawing}>
+              <IconCompass size={17} />
+            </ActionIcon>
+          </Tooltip>
           <Tooltip label="수정">
             <ActionIcon color="dark" variant="subtle" size="sm" onClick={() => onOpenEdit(order)}>
               <IconPencil size={17} />

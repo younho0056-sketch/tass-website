@@ -50,19 +50,28 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       updatedStatus = '진행중';
     }
 
+    const updateData: any = {
+      partnerName: data.partnerName !== undefined ? data.partnerName.trim() : existing.partnerName,
+      partnerId: data.partnerId !== undefined ? (data.partnerId ? parseInt(data.partnerId) : null) : existing.partnerId,
+      itemName: data.itemName !== undefined ? data.itemName.trim() : existing.itemName,
+      quantity: data.quantity !== undefined ? parseInt(data.quantity) : existing.quantity,
+      orderDate: data.orderDate !== undefined ? data.orderDate : existing.orderDate,
+      dueDate: data.dueDate !== undefined ? data.dueDate : existing.dueDate,
+      status: updatedStatus,
+      processSteps: processStepsStr,
+      memo: data.memo !== undefined ? data.memo : existing.memo,
+    };
+
+    if (data.projectNo !== undefined) {
+      updateData.projectNo = data.projectNo ? data.projectNo.trim() : null;
+    }
+    if (data.drawingUrl !== undefined) {
+      updateData.drawingUrl = data.drawingUrl ? data.drawingUrl.trim() : null;
+    }
+
     const updated = await prisma.order.update({
       where: { id: orderId },
-      data: {
-        partnerName: data.partnerName !== undefined ? data.partnerName.trim() : existing.partnerName,
-        partnerId: data.partnerId !== undefined ? (data.partnerId ? parseInt(data.partnerId) : null) : existing.partnerId,
-        itemName: data.itemName !== undefined ? data.itemName.trim() : existing.itemName,
-        quantity: data.quantity !== undefined ? parseInt(data.quantity) : existing.quantity,
-        orderDate: data.orderDate !== undefined ? data.orderDate : existing.orderDate,
-        dueDate: data.dueDate !== undefined ? data.dueDate : existing.dueDate,
-        status: updatedStatus,
-        processSteps: processStepsStr,
-        memo: data.memo !== undefined ? data.memo : existing.memo,
-      }
+      data: updateData
     });
 
     return NextResponse.json({

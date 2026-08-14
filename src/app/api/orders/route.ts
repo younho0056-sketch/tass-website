@@ -20,6 +20,13 @@ export async function GET() {
     let nearingDueCount = 0;
     let completedCount = 0;
 
+    // Create map for retroactive PRJ-001... assignment by chronological ID order
+    const sortedOrders = [...orders].sort((a, b) => a.id - b.id);
+    const projectNoMap = new Map<number, string>();
+    sortedOrders.forEach((o, index) => {
+      projectNoMap.set(o.id, `PRJ-${String(index + 1).padStart(3, '0')}`);
+    });
+
     const parsedOrders = orders.map(order => {
       let rawSteps: any[] = [];
       try {
@@ -61,8 +68,12 @@ export async function GET() {
       else if (currentStatus === '납기임박') nearingDueCount++;
       else inProgressCount++;
 
+      const assignedProjectNo = (order as any).projectNo || projectNoMap.get(order.id) || `PRJ-${String(order.id).padStart(3, '0')}`;
+
       return {
         ...order,
+        projectNo: assignedProjectNo,
+        drawingUrl: (order as any).drawingUrl || null,
         status: currentStatus,
         steps,
         progressPercent
@@ -110,18 +121,27 @@ export async function POST(request: Request) {
       initialStatus = '완료';
     }
 
+    const orderData: any = {
+      partnerName: data.partnerName.trim(),
+      partnerId: data.partnerId ? parseInt(data.partnerId) : null,
+      itemName: data.itemName.trim(),
+      quantity: data.quantity ? parseInt(data.quantity) : 1,
+      orderDate: data.orderDate || new Date().toISOString().split('T')[0],
+      dueDate: data.dueDate || null,
+      status: initialStatus,
+      processSteps: JSON.stringify(steps),
+      memo: data.memo || null,
+    };
+
+    if (data.projectNo && data.projectNo.trim()) {
+      orderData.projectNo = data.projectNo.trim();
+    }
+    if (data.drawingUrl && data.drawingUrl.trim()) {
+      orderData.drawingUrl = data.drawingUrl.trim();
+    }
+
     const order = await prisma.order.create({
-      data: {
-        partnerName: data.partnerName.trim(),
-        partnerId: data.partnerId ? parseInt(data.partnerId) : null,
-        itemName: data.itemName.trim(),
-        quantity: data.quantity ? parseInt(data.quantity) : 1,
-        orderDate: data.orderDate || new Date().toISOString().split('T')[0],
-        dueDate: data.dueDate || null,
-        status: initialStatus,
-        processSteps: JSON.stringify(steps),
-        memo: data.memo || null,
-      }
+      data: orderData
     });
 
     return NextResponse.json(order, { status: 201 });

@@ -7,7 +7,7 @@ import {
   Button, Stack, Group, Text, Badge, TextInput, 
   Modal, Select, Table, Tooltip, Progress,
   NumberInput, SimpleGrid, Textarea, Checkbox,
-  SegmentedControl, Card, Paper
+  SegmentedControl, Card, Paper, Loader, Center
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { 
@@ -49,75 +49,6 @@ function getDaysRemaining(dueDateStr: string | null | undefined): number | null 
 
 const DEFAULT_STEPS = ['설계', '절단', '가공', '용접', '도장', '조립/납품'];
 
-const INITIAL_MOCK_ORDERS: Order[] = [
-  {
-    id: 101,
-    partnerName: '(주)삼우금속공업',
-    partnerId: 1,
-    itemName: '스마트 안전 제어함체 A-Type',
-    quantity: 15,
-    orderDate: '2026-08-01',
-    dueDate: '2026-08-07',
-    status: '진행중',
-    processSteps: '',
-    steps: [
-      { name: '설계', status: '완료', active: true, date: '8/1' },
-      { name: '절단', status: '완료', active: true, date: '8/3' },
-      { name: '가공', status: '진행중', active: true, date: '8/5' },
-      { name: '용접', status: '대기', active: true, date: null },
-      { name: '도장', status: '대기', active: true, date: null },
-      { name: '조립/납품', status: '대기', active: true, date: null }
-    ],
-    progressPercent: 33,
-    memo: '가공 라인 2번 시공 진행 확인 요망',
-    createdAt: '2026-08-01'
-  },
-  {
-    id: 102,
-    partnerName: '태양엔지니어링',
-    partnerId: 2,
-    itemName: '고효율 LED Smart 가로등 프레임',
-    quantity: 30,
-    orderDate: '2026-07-28',
-    dueDate: '2026-08-05',
-    status: '납기임박',
-    processSteps: '',
-    steps: [
-      { name: '설계', status: '완료', active: true, date: '7/28' },
-      { name: '절단', status: '완료', active: true, date: '7/30' },
-      { name: '가공', status: '완료', active: true, date: '8/1' },
-      { name: '용접', status: '완료', active: true, date: '8/3' },
-      { name: '도장', status: '진행중', active: true, date: '8/4' },
-      { name: '조립/납품', status: '대기', active: true, date: null }
-    ],
-    progressPercent: 67,
-    memo: 'D-1 긴급 도장 출고 대상',
-    createdAt: '2026-07-28'
-  },
-  {
-    id: 103,
-    partnerName: '경남정밀(주)',
-    partnerId: 3,
-    itemName: '산업용 ESS 모듈 안전 감지센서 케이스',
-    quantity: 50,
-    orderDate: '2026-07-20',
-    dueDate: '2026-08-02',
-    status: '완료',
-    processSteps: '',
-    steps: [
-      { name: '설계', status: '완료', active: true, date: '7/20' },
-      { name: '절단', status: '완료', active: true, date: '7/22' },
-      { name: '가공', status: '완료', active: true, date: '7/25' },
-      { name: '용접', status: '완료', active: true, date: '7/27' },
-      { name: '도장', status: '완료', active: true, date: '7/30' },
-      { name: '조립/납품', status: '완료', active: true, date: '8/2' }
-    ],
-    progressPercent: 100,
-    memo: '납품 완료 (검수필)',
-    createdAt: '2026-07-20'
-  }
-];
-
 type SortField = 'partnerName' | 'orderDate' | 'dueDate' | 'progressPercent';
 type SortOrder = 'asc' | 'desc';
 
@@ -154,11 +85,11 @@ const fetcher = async (url: string) => {
 };
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>(INITIAL_MOCK_ORDERS);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [allPartners, setAllPartners] = useState<PartnerDetail[]>([]);
 
   // SWR Caching for instant load & background revalidation
-  const { data: ordersData, mutate: mutateOrders } = useSWR('/api/orders', fetcher, {
+  const { data: ordersData, mutate: mutateOrders, isLoading } = useSWR('/api/orders', fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 5000,
   });
@@ -169,7 +100,7 @@ export default function OrdersPage() {
   });
 
   useEffect(() => {
-    if (ordersData?.orders && Array.isArray(ordersData.orders) && ordersData.orders.length > 0) {
+    if (ordersData?.orders && Array.isArray(ordersData.orders)) {
       setOrders(ordersData.orders);
     }
   }, [ordersData]);
@@ -770,7 +701,19 @@ export default function OrdersPage() {
           />
         </Group>
 
-        {viewMode === 'CALENDAR' ? (
+        {/* 로딩 스피너 및 메인 뷰 */}
+        {isLoading && orders.length === 0 ? (
+          <Paper p="xl" radius="lg" className="glass-panel">
+            <Center p="xl" style={{ minHeight: '280px' }}>
+              <Stack align="center" gap="md">
+                <Loader size="lg" color="blue" type="dots" />
+                <Text fw={700} c="dimmed" size="sm">
+                  공정 관리 데이터를 안전하게 불러오는 중입니다...
+                </Text>
+              </Stack>
+            </Center>
+          </Paper>
+        ) : viewMode === 'CALENDAR' ? (
           <Paper p="md" radius="lg" className="glass-panel">
             {/* 캘린더 컨트롤러 바 */}
             <Group justify="space-between" align="center" mb="md" className="no-print">

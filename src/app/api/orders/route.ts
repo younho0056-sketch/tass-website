@@ -21,12 +21,21 @@ export async function GET() {
     let completedCount = 0;
 
     const parsedOrders = orders.map(order => {
-      let steps: ProcessStep[] = [];
+      let rawSteps: any[] = [];
       try {
-        steps = JSON.parse(order.processSteps || '[]');
+        rawSteps = JSON.parse(order.processSteps || '[]');
       } catch {
-        steps = [];
+        rawSteps = [];
       }
+
+      const steps: ProcessStep[] = Array.isArray(rawSteps)
+        ? rawSteps.map(s => ({
+            name: s.name || '',
+            status: s.status || '대기',
+            active: s.active !== undefined ? s.active : true,
+            date: s.date || null
+          }))
+        : [];
 
       // Calculate progress percentage
       const activeSteps = steps.filter(s => s.active);

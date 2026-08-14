@@ -24,12 +24,21 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       processStepsStr = Array.isArray(data.processSteps) ? JSON.stringify(data.processSteps) : data.processSteps;
     }
 
-    let steps: ProcessStep[] = [];
+    let rawSteps: any[] = [];
     try {
-      steps = JSON.parse(processStepsStr);
+      rawSteps = JSON.parse(processStepsStr);
     } catch {
-      steps = [];
+      rawSteps = [];
     }
+
+    const steps: ProcessStep[] = Array.isArray(rawSteps)
+      ? rawSteps.map(s => ({
+          name: s.name || '',
+          status: s.status || '대기',
+          active: s.active !== undefined ? s.active : true,
+          date: s.date || null
+        }))
+      : [];
 
     const activeSteps = steps.filter(s => s.active);
     const completedSteps = activeSteps.filter(s => s.status === '완료');

@@ -61,12 +61,12 @@ const INITIAL_MOCK_ORDERS: Order[] = [
     status: '진행중',
     processSteps: '',
     steps: [
-      { name: '설계', status: '완료', active: true },
-      { name: '절단', status: '완료', active: true },
-      { name: '가공', status: '진행중', active: true },
-      { name: '용접', status: '대기', active: true },
-      { name: '도장', status: '대기', active: true },
-      { name: '조립/납품', status: '대기', active: true }
+      { name: '설계', status: '완료', active: true, date: '8/1' },
+      { name: '절단', status: '완료', active: true, date: '8/3' },
+      { name: '가공', status: '진행중', active: true, date: '8/5' },
+      { name: '용접', status: '대기', active: true, date: null },
+      { name: '도장', status: '대기', active: true, date: null },
+      { name: '조립/납품', status: '대기', active: true, date: null }
     ],
     progressPercent: 33,
     memo: '가공 라인 2번 시공 진행 확인 요망',
@@ -83,12 +83,12 @@ const INITIAL_MOCK_ORDERS: Order[] = [
     status: '납기임박',
     processSteps: '',
     steps: [
-      { name: '설계', status: '완료', active: true },
-      { name: '절단', status: '완료', active: true },
-      { name: '가공', status: '완료', active: true },
-      { name: '용접', status: '완료', active: true },
-      { name: '도장', status: '진행중', active: true },
-      { name: '조립/납품', status: '대기', active: true }
+      { name: '설계', status: '완료', active: true, date: '7/28' },
+      { name: '절단', status: '완료', active: true, date: '7/30' },
+      { name: '가공', status: '완료', active: true, date: '8/1' },
+      { name: '용접', status: '완료', active: true, date: '8/3' },
+      { name: '도장', status: '진행중', active: true, date: '8/4' },
+      { name: '조립/납품', status: '대기', active: true, date: null }
     ],
     progressPercent: 67,
     memo: 'D-1 긴급 도장 출고 대상',
@@ -105,12 +105,12 @@ const INITIAL_MOCK_ORDERS: Order[] = [
     status: '완료',
     processSteps: '',
     steps: [
-      { name: '설계', status: '완료', active: true },
-      { name: '절단', status: '완료', active: true },
-      { name: '가공', status: '완료', active: true },
-      { name: '용접', status: '완료', active: true },
-      { name: '도장', status: '완료', active: true },
-      { name: '조립/납품', status: '완료', active: true }
+      { name: '설계', status: '완료', active: true, date: '7/20' },
+      { name: '절단', status: '완료', active: true, date: '7/22' },
+      { name: '가공', status: '완료', active: true, date: '7/25' },
+      { name: '용접', status: '완료', active: true, date: '7/27' },
+      { name: '도장', status: '완료', active: true, date: '7/30' },
+      { name: '조립/납품', status: '완료', active: true, date: '8/2' }
     ],
     progressPercent: 100,
     memo: '납품 완료 (검수필)',
@@ -361,7 +361,8 @@ export default function OrdersPage() {
       return {
         name,
         status: existingStep ? existingStep.status : '대기',
-        active: isActive
+        active: isActive,
+        date: existingStep ? existingStep.date : null
       };
     });
 
@@ -399,7 +400,7 @@ export default function OrdersPage() {
     }
   }, [canEdit, activeStepNames, editingOrder, partnerName, itemName, quantity, orderDate, dueDate, memo, close, resetForm, mutateOrders]);
 
-  // Optimistic Update with instant 0ms state mutation and background API call + rollback on error
+  // Optimistic Update with instant 0ms state mutation, auto date (M/D) recording, and background API call + rollback on error
   const handleToggleStep = useCallback(async (order: Order, stepName: string) => {
     if (!canEdit) {
       alert('직원 권한(1234)은 공정 단계 변경이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
@@ -411,7 +412,14 @@ export default function OrdersPage() {
         const nextStatus: '대기' | '진행중' | '완료' = 
           s.status === '대기' ? '진행중' :
           s.status === '진행중' ? '완료' : '대기';
-        return { ...s, status: nextStatus };
+
+        let nextDate: string | null = null;
+        if (nextStatus === '진행중' || nextStatus === '완료') {
+          const now = new Date();
+          nextDate = `${now.getMonth() + 1}/${now.getDate()}`;
+        }
+
+        return { ...s, status: nextStatus, date: nextDate };
       }
       return s;
     });
@@ -624,10 +632,14 @@ export default function OrdersPage() {
       const activeSteps = (o.steps || []).filter(s => s.active);
       const inProgressStep = activeSteps.find(s => s.status === '진행중');
       const currentStage = inProgressStep 
-        ? `${inProgressStep.name} 진행중`
+        ? `${inProgressStep.name}${inProgressStep.date ? `(${inProgressStep.date})` : ''} 진행중`
         : o.status === '완료' 
           ? '전 공정 완료' 
           : '대기 중';
+
+      const stepsHistoryStr = activeSteps
+        .map(s => s.date ? `${s.name}(${s.date})` : s.name)
+        .join(' ➔ ');
 
       return {
         '상태': o.status,
@@ -638,6 +650,7 @@ export default function OrdersPage() {
         '납기일': o.dueDate || '-',
         '진척도(%)': `${o.progressPercent}%`,
         '현재 공정 단계': currentStage,
+        '전체 공정 이력 (날짜)': stepsHistoryStr,
         '비고': o.memo || '-'
       };
     });
@@ -652,6 +665,7 @@ export default function OrdersPage() {
       { wch: 12 },
       { wch: 12 },
       { wch: 22 },
+      { wch: 35 },
       { wch: 30 },
     ];
 
@@ -989,7 +1003,7 @@ export default function OrdersPage() {
                     onClick={() => handleSort('progressPercent')}
                   >
                     <Group gap={4} wrap="nowrap" align="center">
-                      <Text fw={700} size="sm">공정 진척도 (라이브 스텝 체크)</Text>
+                      <Text fw={700} size="sm">공정 진척도 (라이브 스텝 체크 & 날짜)</Text>
                       {renderSortIcon('progressPercent')}
                     </Group>
                   </Table.Th>
@@ -1444,11 +1458,11 @@ export default function OrdersPage() {
                               fontSize: '8.5pt'
                             }}
                           >
-                            ▶ {s.name}
+                            ▶ {s.name}{s.date ? `(${s.date})` : ''}
                           </span>
                         ) : (
                           <span style={{ color: s.status === '완료' ? '#059669' : '#6b7280', fontWeight: s.status === '완료' ? 600 : 400, fontSize: '8.5pt' }}>
-                            {s.name}
+                            {s.name}{s.date ? `(${s.date})` : ''}
                           </span>
                         )}
                         {i < arr.length - 1 && <span style={{ color: '#9ca3af', margin: '0 2px' }}>➔</span>}

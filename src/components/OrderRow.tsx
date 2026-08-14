@@ -8,6 +8,7 @@ export type ProcessStep = {
   name: string;
   status: '대기' | '진행중' | '완료';
   active: boolean;
+  date?: string | null;
 };
 
 export type Order = {
@@ -120,28 +121,32 @@ const OrderRow = memo(function OrderRow({
             </Text>
           </Group>
 
-          {/* 공정 스텝 라이브 체크 뱃지 목록 */}
-          <Group gap={4} wrap="wrap">
+          {/* 공정 스텝 라이브 체크 뱃지 목록 (하단 날짜 M/D 노출) */}
+          <Group gap={6} wrap="wrap" align="flex-start">
             {(order.steps || []).filter(s => s.active).map(s => (
-              <Badge
-                key={s.name}
-                size="sm"
-                radius="sm"
-                variant={s.status === '완료' ? 'light' : s.status === '진행중' ? 'filled' : 'outline'}
-                color={s.status === '완료' ? 'dark' : s.status === '진행중' ? 'blue' : 'gray.4'}
-                onClick={() => onToggleStep(order, s.name)}
-                style={{ 
-                  cursor: 'pointer', 
-                  userSelect: 'none', 
-                  textTransform: 'none', 
-                  fontWeight: 600,
-                  paddingLeft: '6px',
-                  paddingRight: '6px',
-                  height: '22px'
-                }}
-              >
-                {s.status === '완료' ? `✓ ${s.name} 완료` : s.status === '진행중' ? `▶ ${s.name} 진행중` : s.name}
-              </Badge>
+              <Stack key={s.name} gap={2} align="center" style={{ display: 'inline-flex' }}>
+                <Badge
+                  size="sm"
+                  radius="sm"
+                  variant={s.status === '완료' ? 'light' : s.status === '진행중' ? 'filled' : 'outline'}
+                  color={s.status === '완료' ? 'dark' : s.status === '진행중' ? 'blue' : 'gray.4'}
+                  onClick={() => onToggleStep(order, s.name)}
+                  style={{ 
+                    cursor: 'pointer', 
+                    userSelect: 'none', 
+                    textTransform: 'none', 
+                    fontWeight: 600,
+                    paddingLeft: '6px',
+                    paddingRight: '6px',
+                    height: '22px'
+                  }}
+                >
+                  {s.status === '완료' ? `✓ ${s.name} 완료` : s.status === '진행중' ? `▶ ${s.name} 진행중` : s.name}
+                </Badge>
+                <Text size="11px" c="dimmed" fw={600} ta="center" style={{ minHeight: '14px', lineHeight: 1 }}>
+                  {s.date || ''}
+                </Text>
+              </Stack>
             ))}
           </Group>
         </Stack>

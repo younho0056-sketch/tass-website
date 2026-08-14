@@ -5,6 +5,7 @@ interface ProcessStep {
   name: string;
   status: string;
   active: boolean;
+  date?: string | null;
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -5,6 +5,7 @@ interface ProcessStep {
   name: string;
   status: string;
   active: boolean;
+  date?: string | null;
 }
 
 export async function GET() {

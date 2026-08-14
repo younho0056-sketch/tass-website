@@ -114,7 +114,7 @@ export default function OrdersPage() {
   // Search, Filter & Sort State
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
-  const [tabFilter, setTabFilter] = useState<'ALL' | 'IN_PROGRESS' | 'URGENT' | 'COMPLETED'>('ALL');
+  const [tabFilter, setTabFilter] = useState<'ALL' | 'IN_PROGRESS' | 'URGENT' | 'COMPLETED'>('IN_PROGRESS');
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
 
@@ -648,10 +648,10 @@ export default function OrdersPage() {
             if (val !== 'ALL') setFilterStatus(null);
           }}
           data={[
-            { label: `전체 보기 (${metrics.totalCount}건)`, value: 'ALL' },
             { label: `진행 중인 공정 (${metrics.inProgressCount}건)`, value: 'IN_PROGRESS' },
             { label: `🚨 납기 임박 (${metrics.urgentCount}건)`, value: 'URGENT' },
             { label: `완료된 공정 (${metrics.completedCount}건)`, value: 'COMPLETED' },
+            { label: `전체 보기 (${metrics.totalCount}건)`, value: 'ALL' },
           ]}
           size="md"
           radius="md"

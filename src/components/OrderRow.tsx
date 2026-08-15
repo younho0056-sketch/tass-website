@@ -85,21 +85,12 @@ export const OrderRow = memo(function OrderRow({
         backgroundColor: isUrgent ? 'rgba(254, 226, 226, 0.40)' : undefined
       }}
     >
-      <Table.Td style={{ whiteSpace: 'nowrap' }}>
-        <Badge 
-          color={order.status === '완료' ? 'green' : isUrgent ? 'red' : 'blue'} 
-          variant={isUrgent ? 'filled' : 'light'}
-          size="md"
-        >
-          {isUrgent ? '납기임박' : order.status}
-        </Badge>
-      </Table.Td>
       <Table.Td>
         <Tooltip label="거래처 상세 정보 보기">
           <Text 
-            fw={700} 
-            c="blue.7"
-            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+            fw={500} 
+            c="blue.8"
+            style={{ cursor: 'pointer' }}
             onClick={() => onShowPartnerDetail(order.partnerName, order)}
           >
             {order.partnerName}
@@ -110,8 +101,8 @@ export const OrderRow = memo(function OrderRow({
         <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{displayProjectNo}</Text>
       </Table.Td>
       <Table.Td>
-        <Text fw={600}>{order.itemName}</Text>
-        <Text size="xs" c="dimmed">{order.quantity}개</Text>
+        <Text size="sm" fw={500} c="dark">{order.itemName}</Text>
+        <Text size="xs" c="dimmed" fw={400}>{order.quantity}개</Text>
       </Table.Td>
       <Table.Td style={{ whiteSpace: 'nowrap' }}>
         <Text size="sm" style={{ whiteSpace: 'nowrap' }}>{order.orderDate || '-'}</Text>
@@ -120,7 +111,7 @@ export const OrderRow = memo(function OrderRow({
         <Group gap={4} wrap="nowrap" align="center">
           <Text 
             size="sm" 
-            fw={isUrgent ? 900 : 600} 
+            fw={isUrgent ? 600 : 500} 
             c={isUrgent ? 'red.7' : 'dark'}
             style={{ whiteSpace: 'nowrap' }}
           >
@@ -131,7 +122,7 @@ export const OrderRow = memo(function OrderRow({
               color="red" 
               variant="filled" 
               size="xs"
-              style={{ fontWeight: 800 }}
+              style={{ fontWeight: 600 }}
             >
               {daysLeft < 0 ? `D+${Math.abs(daysLeft)}` : daysLeft === 0 ? 'D-Day' : `D-${daysLeft}`}
             </Badge>

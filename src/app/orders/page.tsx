@@ -1144,7 +1144,6 @@ export default function OrdersPage() {
               <Table striped highlightOnHover withTableBorder verticalSpacing="md">
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th w={75} style={{ whiteSpace: 'nowrap' }}>상태</Table.Th>
                     <Table.Th 
                       w={140}
                       onClick={() => handleSort('partnerName')}

@@ -100,10 +100,10 @@ const OrderCard = memo(function OrderCard({
           </Group>
 
           <Text 
-            fw={800} 
+            fw={500} 
             size="sm"
-            c="blue.7"
-            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+            c="blue.8"
+            style={{ cursor: 'pointer' }}
             onClick={() => onShowPartnerDetail(order.partnerName, order)}
           >
             {order.partnerName}
@@ -113,13 +113,13 @@ const OrderCard = memo(function OrderCard({
         {/* Item & Quantity / Dates */}
         <Group justify="space-between" align="flex-start" mt={2}>
           <div>
-            <Text fw={800} size="md" c="dark">{order.itemName}</Text>
-            <Text size="xs" c="dimmed" fw={600}>수량: {order.quantity}개</Text>
+            <Text fw={500} size="sm" c="dark">{order.itemName}</Text>
+            <Text size="xs" c="dimmed" fw={400}>수량: {order.quantity}개</Text>
           </div>
 
           <Stack gap={2} align="flex-end">
             <Text size="11px" c="dimmed">발주: {order.orderDate || '-'}</Text>
-            <Text size="xs" fw={isUrgent ? 900 : 700} c={isUrgent ? 'red.7' : 'dark'}>
+            <Text size="xs" fw={isUrgent ? 600 : 500} c={isUrgent ? 'red.7' : 'dark'}>
               납기: {order.dueDate || '-'}
             </Text>
           </Stack>

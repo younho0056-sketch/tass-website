@@ -43,7 +43,7 @@ export async function findSharedWithMeFolders(drive: ReturnType<typeof google.dr
       includeItemsFromAllDrives: true,
       supportsTeamDrives: true,
       includeTeamDriveItems: true,
-      pageSize: 20
+      pageSize: 30
     });
     return res.data.files || [];
   } catch (err) {
@@ -89,10 +89,10 @@ export async function getRootParentFolder(
       supportsTeamDrives: true,
       includeTeamDriveItems: true
     });
-    if (searchByName.data.files && searchByName.data.files.length > 0) {
+    if (searchByName.data.files && searchByName.data.files.length > 0 && searchByName.data.files[0].id) {
       return {
-        id: searchByName.data.files[0].id!,
-        name: searchByName.data.files[0].name!,
+        id: searchByName.data.files[0].id,
+        name: searchByName.data.files[0].name || '타스_도면',
         method: 'name_search_tas_drawing'
       };
     }
@@ -105,11 +105,13 @@ export async function getRootParentFolder(
   if (sharedFolders.length > 0) {
     const tasFolder = sharedFolders.find(f => f.name?.includes('타스') || f.name?.includes('TASS'));
     const target = tasFolder || sharedFolders[0];
-    return {
-      id: target.id!,
-      name: target.name!,
-      method: 'shared_with_me'
-    };
+    if (target.id) {
+      return {
+        id: target.id,
+        name: target.name || 'Shared Folder',
+        method: 'shared_with_me'
+      };
+    }
   }
 
   return null;
@@ -118,13 +120,17 @@ export async function getRootParentFolder(
 export async function findOrCreateDriveSubFolder(
   drive: ReturnType<typeof google.drive>,
   folderName: string,
-  parentFolderId?: string
+  parentFolderId: string
 ): Promise<string | null> {
+  if (!parentFolderId || !parentFolderId.trim()) {
+    console.warn(`[GoogleDrive] Cannot create subfolder '${folderName}' without a parentFolderId. Service account root creation is blocked by Google API quota rules.`);
+    return null;
+  }
+
+  const cleanParentId = parentFolderId.trim();
+
   try {
-    let query = `name = '${folderName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
-    if (parentFolderId) {
-      query += ` and '${parentFolderId}' in parents`;
-    }
+    const query = `name = '${folderName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and '${cleanParentId}' in parents`;
 
     const searchRes = await drive.files.list({
       q: query,
@@ -135,19 +141,16 @@ export async function findOrCreateDriveSubFolder(
       includeTeamDriveItems: true
     });
 
-    if (searchRes.data.files && searchRes.data.files.length > 0) {
-      return searchRes.data.files[0].id || null;
+    if (searchRes.data.files && searchRes.data.files.length > 0 && searchRes.data.files[0].id) {
+      return searchRes.data.files[0].id;
     }
 
-    // Folder doesn't exist, create it under parentFolderId
-    const fileMetadata: any = {
+    // Folder doesn't exist under parentFolderId, create it explicitly with parents: [cleanParentId]
+    const fileMetadata = {
       name: folderName,
-      mimeType: 'application/vnd.google-apps.folder'
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [cleanParentId]
     };
-
-    if (parentFolderId) {
-      fileMetadata.parents = [parentFolderId];
-    }
 
     const folderRes = await drive.files.create({
       requestBody: fileMetadata,
@@ -157,8 +160,8 @@ export async function findOrCreateDriveSubFolder(
     });
 
     return folderRes.data.id || null;
-  } catch (err) {
-    console.error(`[GoogleDrive] Error finding/creating folder [${folderName}]:`, err);
+  } catch (err: any) {
+    console.error(`[GoogleDrive] Error finding/creating subfolder '${folderName}' under '${cleanParentId}':`, err);
     return null;
   }
 }
@@ -181,7 +184,7 @@ export async function findOrCreateDriveFolderHierarchy(
     return { 
       rootFolderId: null, 
       targetFolderId: null, 
-      error: '기준 폴더(타스_도면)를 찾을 수 없거나 구글 드라이브 접근 권한이 없습니다. 서비스 계정에 폴더를 공유해 주셨는지 확인해 주세요.' 
+      error: '기준 공유 폴더(타스_도면)를 찾을 수 없거나 구글 드라이브 접근 권한이 없습니다. 구글 드라이브 폴더를 서비스 계정 이메일로 편집자 권한 공유해 주셨는지 확인해 주세요.' 
     };
   }
 
@@ -225,20 +228,23 @@ export async function uploadBufferToGoogleDrive({
 
     const { targetFolderId, error: hierarchyError } = await findOrCreateDriveFolderHierarchy(drive, { partnerName, projectNo });
 
-    if (!targetFolderId) {
+    if (!targetFolderId || typeof targetFolderId !== 'string' || !targetFolderId.trim()) {
       return {
         success: false,
-        reason: hierarchyError || '구글 드라이브 대상 폴더(타스_도면 > 거래처명 > 프로젝트번호) 생성 및 접근에 실패하였습니다.'
+        reason: hierarchyError || '구글 드라이브 대상 공유 폴더 ID(targetFolderId)가 결정되지 않았습니다. (Service Account는 개인 저장 공간이 없으므로 공유 폴더 parents 지정이 필수입니다.)'
       };
     }
+
+    const cleanTargetFolderId = targetFolderId.trim();
 
     const stream = new Readable();
     stream.push(buffer);
     stream.push(null);
 
-    const fileMetadata: any = {
+    // CRITICAL: parents MUST be a non-empty array [cleanTargetFolderId]
+    const fileMetadata = {
       name: fileName,
-      parents: [targetFolderId]
+      parents: [cleanTargetFolderId]
     };
 
     const media = {
@@ -258,7 +264,7 @@ export async function uploadBufferToGoogleDrive({
       success: true,
       fileId: fileRes.data.id || undefined,
       webViewLink: fileRes.data.webViewLink || undefined,
-      targetFolderId
+      targetFolderId: cleanTargetFolderId
     };
   } catch (err: any) {
     console.error('[GoogleDrive] Upload error:', err);

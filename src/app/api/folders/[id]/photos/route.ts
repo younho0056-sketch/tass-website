@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -19,6 +22,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
 
+    // Auto-create 'order-photos' bucket if possible
+    if (supabaseUrl && supabaseKey) {
+      try {
+        await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ id: 'order-photos', name: 'order-photos', public: true })
+        });
+      } catch (e) {
+        // Ignored if already exists
+      }
+    }
+
     const uploadedPhotos = await Promise.all(
       files.map(async (file) => {
         const bytes = await file.arrayBuffer();
@@ -27,28 +46,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
         // 1. Attempt Supabase Storage Upload
         if (supabaseUrl && supabaseKey) {
-          try {
-            const fileExt = file.name.split('.').pop() || 'png';
-            const fileName = `blog-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-            const bucketName = 'blog-images';
+          const bucketsToTry = ['order-photos', 'blog-images', 'product-images'];
+          const fileExt = file.name.split('.').pop() || 'png';
+          const fileName = `blog-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
 
-            const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucketName}/${fileName}`;
-            const uploadRes = await fetch(uploadUrl, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${supabaseKey}`,
-                'Content-Type': file.type || 'image/png',
-                'x-upsert': 'true'
-              },
-              body: buffer
-            });
-
-            if (uploadRes.ok) {
-              photoUrl = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${fileName}`;
-            } else {
-              // Try fallback bucket 'product-images' if 'blog-images' bucket is not created
-              const fallbackUploadUrl = `${supabaseUrl}/storage/v1/object/product-images/${fileName}`;
-              const fallbackRes = await fetch(fallbackUploadUrl, {
+          for (const bucketName of bucketsToTry) {
+            try {
+              const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucketName}/${fileName}`;
+              const uploadRes = await fetch(uploadUrl, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${supabaseKey}`,
@@ -57,16 +62,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 },
                 body: buffer
               });
-              if (fallbackRes.ok) {
-                photoUrl = `${supabaseUrl}/storage/v1/object/public/product-images/${fileName}`;
+
+              if (uploadRes.ok) {
+                photoUrl = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${fileName}`;
+                break;
               }
+            } catch (supabaseErr) {
+              console.warn(`Supabase bucket ${bucketName} upload attempt failed:`, supabaseErr);
             }
-          } catch (supabaseErr) {
-            console.warn('Supabase storage blog upload attempt failed, using persistent fallback:', supabaseErr);
           }
         }
 
-        // 2. Persistent Storage Fallback (Data URL for zero-disk serverless persistence)
+        // 2. Persistent Storage Fallback (Data URL)
         if (!photoUrl) {
           const mimeType = file.type || 'image/png';
           const base64 = buffer.toString('base64');
@@ -88,4 +95,3 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   }
 }
-

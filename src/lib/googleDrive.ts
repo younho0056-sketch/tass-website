@@ -117,13 +117,24 @@ export async function getRootParentFolder(
   return null;
 }
 
+/**
+ * 1단계 공통 함수: 루트 기준 폴더 ID를 탐색하여 수급 (실패 시 즉시 Error throw)
+ */
+export async function getResolvedRootFolderId(drive: ReturnType<typeof google.drive>): Promise<string> {
+  const rootInfo = await getRootParentFolder(drive);
+  if (!rootInfo || !rootInfo.id) {
+    throw new Error('기준 공유 폴더(타스_도면)를 찾을 수 없거나 구글 드라이브 접근 권한이 없습니다. 구글 드라이브 폴더를 서비스 계정 이메일로 편집자 권한 공유해 주셨는지 확인해 주세요.');
+  }
+  return rootInfo.id;
+}
+
 export async function findOrCreateDriveSubFolder(
   drive: ReturnType<typeof google.drive>,
   folderName: string,
   parentFolderId: string
 ): Promise<string | null> {
   if (!parentFolderId || !parentFolderId.trim()) {
-    console.warn(`[GoogleDrive] Cannot create subfolder '${folderName}' without a parentFolderId. Service account root creation is blocked by Google API quota rules.`);
+    console.warn(`[GoogleDrive] Cannot create subfolder '${folderName}' without a parentFolderId.`);
     return null;
   }
 
@@ -161,7 +172,7 @@ export async function findOrCreateDriveSubFolder(
 
     return folderRes.data.id || null;
   } catch (err: any) {
-    console.error(`[GoogleDrive] Error finding/creating subfolder '${folderName}' under '${cleanParentId}':`, err);
+    console.warn(`[GoogleDrive] Warning creating subfolder '${folderName}' under '${cleanParentId}': ${err.message}`);
     return null;
   }
 }
@@ -175,20 +186,9 @@ export async function findOrCreateDriveFolderHierarchy(
     partnerName?: string;
     projectNo: string;
   }
-): Promise<{ rootFolderId: string | null; targetFolderId: string | null; error?: string }> {
-  // Step 1: Get Root Parent Folder (타스_도면 or shared/env folder)
-  const root = await getRootParentFolder(drive);
-  const rootId = root ? root.id : null;
-
-  console.log('[GoogleDrive] Root Folder resolved:', rootId, 'via method:', root?.method || 'none');
-
-  if (!rootId) {
-    return { 
-      rootFolderId: null, 
-      targetFolderId: null, 
-      error: '기준 공유 폴더(타스_도면)를 찾을 수 없거나 구글 드라이브 접근 권한이 없습니다. 구글 드라이브 폴더를 서비스 계정 이메일로 편집자 권한 공유해 주셨는지 확인해 주세요.' 
-    };
-  }
+): Promise<{ rootFolderId: string; targetFolderId: string }> {
+  // Step 1: Get Root Parent Folder (타스_도면) - throws Error if missing!
+  const rootId = await getResolvedRootFolderId(drive);
 
   // Step 2: Find or create Partner Folder (e.g. '아크인터내셔널') under Root Folder
   const cleanPartnerName = partnerName && partnerName.trim() ? partnerName.trim() : '일반거래처';
@@ -199,7 +199,15 @@ export async function findOrCreateDriveFolderHierarchy(
   const projectFolderId = await findOrCreateDriveSubFolder(drive, projectNo, parentForProject);
 
   const finalTargetFolderId = projectFolderId || partnerFolderId || rootId;
-  console.log('[GoogleDrive] Target Folder ID resolved:', finalTargetFolderId);
+
+  console.log('[Drive Upload Debug]', { 
+    rootId, 
+    partnerName: cleanPartnerName, 
+    partnerFolderId, 
+    projectNo, 
+    projectFolderId, 
+    targetFolderId: finalTargetFolderId 
+  });
 
   return {
     rootFolderId: rootId,
@@ -230,12 +238,11 @@ export async function uploadBufferToGoogleDrive({
       throw new Error(errorMsg);
     }
 
-    const { targetFolderId, error: hierarchyError } = await findOrCreateDriveFolderHierarchy(drive, { partnerName, projectNo });
-
-    console.log('[GoogleDrive] Target Folder ID resolved:', targetFolderId);
+    // Step 1 ~ 3: Hierarchy navigation (throws if rootId is missing)
+    const { targetFolderId } = await findOrCreateDriveFolderHierarchy(drive, { partnerName, projectNo });
 
     if (!targetFolderId || typeof targetFolderId !== 'string' || !targetFolderId.trim()) {
-      const errorMsg = `[GoogleDrive Error] targetFolderId가 유효하지 않습니다. (${hierarchyError || 'Service Account는 개인 저장 용량이 없으므로 공유 폴더 parents 지정이 필수입니다.'})`;
+      const errorMsg = `[GoogleDrive Error] targetFolderId가 유효하지 않습니다. (Service Account는 개인 저장 용량이 없으므로 공유 폴더 parents 지정이 필수입니다.)`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
@@ -246,10 +253,10 @@ export async function uploadBufferToGoogleDrive({
     stream.push(buffer);
     stream.push(null);
 
-    // Explicitly construct createParams with parents: [cleanTargetFolderId] (string[])
+    // Step 4: drive.files.create with parents: [cleanTargetFolderId]
     const fileMetadata = {
       name: fileName,
-      parents: [cleanTargetFolderId] // 반드시 targetFolderId가 들어있는 string[] 배열이어야 함
+      parents: [cleanTargetFolderId]
     };
 
     const media = {

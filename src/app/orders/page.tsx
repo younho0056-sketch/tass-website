@@ -296,7 +296,7 @@ export default function OrdersPage() {
       notifications.update({
         id: `upload-${order.id}`,
         title: '✅ 현장 사진 무저장 자동 업로드 완료!',
-        message: `${projectNo} 프로젝트 폴더에 ${files.length}장의 사진이 성공적으로 저장되었습니다. (/blog 메뉴에 썸네일 및 장수 실시간 반영)`,
+        message: `${projectNo} 프로젝트 폴더에 ${files.length}장의 사진이 성공적으로 저장되었습니다. (/blog 갤러리 반영 & 구글 드라이브 백그라운드 원본 자동 업로드 완료)`,
         color: 'teal',
         loading: false,
         autoClose: 5000

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { uploadBufferToGoogleDrive } from '@/lib/googleDrive';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -53,6 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const buffer = Buffer.from(bytes);
         let photoUrl = '';
 
+        // 1. Supabase Storage or Base64 Fallback
         if (supabaseUrl && supabaseKey) {
           try {
             const fileExt = file.name.split('.').pop() || 'png';
@@ -98,6 +100,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           photoUrl = `data:${mimeType};base64,${base64}`;
         }
 
+        // 2. Trigger Google Drive Upload in Background (non-blocking)
+        const driveFileName = `site-${projectNo}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}.${file.name.split('.').pop() || 'jpg'}`;
+        uploadBufferToGoogleDrive({
+          fileName: driveFileName,
+          mimeType: file.type || 'image/jpeg',
+          buffer,
+          projectNo
+        }).catch(err => console.error('[Background Drive Upload Failed]:', err));
+
+        // 3. Create BlogPhoto record for instant web gallery
         return prisma.blogPhoto.create({
           data: {
             url: photoUrl,

@@ -171,6 +171,11 @@ body {
     print-color-adjust: exact;
   }
 
+  .print-color-exact {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   /* 웹 UI 요소 완전히 숨기기 */
   header, nav, aside, footer, .no-print, .print-hidden, .print\:hidden, .mantine-AppShell-header, .mantine-AppShell-navbar, .page-header-banner, .mantine-Modal-root {
     display: none !important;

@@ -1619,66 +1619,91 @@ export default function OrdersPage() {
             <thead>
               <tr>
                 <th style={{ width: '4%', whiteSpace: 'nowrap' }}>순번</th>
-                <th style={{ width: '6%', whiteSpace: 'nowrap' }}>상태</th>
-                <th style={{ width: '13%' }}>거래처명</th>
-                <th style={{ width: '10%', whiteSpace: 'nowrap' }}>프로젝트 번호</th>
-                <th style={{ width: '14%' }}>품목/수량</th>
+                <th style={{ width: '14%' }}>거래처명</th>
+                <th style={{ width: '11%', whiteSpace: 'nowrap' }}>프로젝트 번호</th>
+                <th style={{ width: '15%' }}>품목/수량</th>
                 <th style={{ width: '10%', whiteSpace: 'nowrap' }}>발주일</th>
                 <th style={{ width: '10%', whiteSpace: 'nowrap' }}>납기일</th>
                 <th style={{ width: '5%', whiteSpace: 'nowrap' }}>진척율</th>
-                <th style={{ width: '28%' }}>공정 단계 현황</th>
+                <th style={{ width: '31%' }}>공정 단계 현황</th>
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map((o, idx) => (
-                <tr key={o.id}>
-                  <td style={{ whiteSpace: 'nowrap' }}>{idx + 1}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <span style={{ 
-                      fontWeight: 'bold', 
-                      color: o.status === '완료' ? '#047857' : o.status === '납기임박' ? '#c2410c' : '#1d4ed8' 
-                    }}>
-                      {o.status}
-                    </span>
-                  </td>
-                  <td><strong>{o.partnerName}</strong></td>
-                  <td style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>{o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`}</td>
-                  <td>{o.itemName} ({o.quantity}개)</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{o.orderDate || '-'}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{o.dueDate || '-'}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}><strong>{o.progressPercent}%</strong></td>
-                  <td style={{ fontSize: '8.5pt', textAlign: 'left', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
-                    {(o.steps || []).filter(s => s.active).map((s, i, arr) => (
-                      <span key={s.name} style={{ display: 'inline-block', whiteSpace: 'nowrap' }}>
-                        {s.status === '진행중' ? (
-                          <span 
-                            className="step-highlight" 
-                            style={{ 
-                              backgroundColor: '#e0f2fe', 
-                              color: '#0369a1', 
-                              fontWeight: 'bold', 
-                              padding: '1px 4px', 
-                              borderRadius: '3px', 
-                              border: '1px solid #0284c7',
-                              fontSize: '8.5pt'
-                            }}
-                          >
-                            ▶ {s.name}{s.date ? `(${s.date})` : ''}
-                          </span>
-                        ) : (
-                          <span style={{ color: s.status === '완료' ? '#059669' : '#6b7280', fontWeight: s.status === '완료' ? 600 : 400, fontSize: '8.5pt' }}>
-                            {s.name}{s.date ? `(${s.date})` : ''}
-                          </span>
-                        )}
-                        {i < arr.length - 1 && <span style={{ color: '#9ca3af', margin: '0 2px' }}>➔</span>}
-                      </span>
-                    ))}
-                  </td>
-                </tr>
-              ))}
+              {filteredOrders.map((o, idx) => {
+                const daysLeft = getDaysRemaining(o.dueDate);
+                const isUrgent = o.status !== '완료' && daysLeft !== null && daysLeft <= 2;
+                return (
+                  <tr key={o.id}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{idx + 1}</td>
+                    <td><strong>{o.partnerName}</strong></td>
+                    <td style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>{o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`}</td>
+                    <td>{o.itemName} ({o.quantity}개)</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{o.orderDate || '-'}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {isUrgent ? (
+                        <span 
+                          className="print-color-exact"
+                          style={{
+                            color: '#dc2626',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            WebkitPrintColorAdjust: 'exact',
+                            printColorAdjust: 'exact'
+                          }}
+                        >
+                          <span style={{
+                            display: 'inline-block',
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: '#dc2626',
+                            WebkitPrintColorAdjust: 'exact',
+                            printColorAdjust: 'exact'
+                          }} />
+                          {o.dueDate || '-'}
+                        </span>
+                      ) : (
+                        <span>{o.dueDate || '-'}</span>
+                      )}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}><strong>{o.progressPercent}%</strong></td>
+                    <td style={{ fontSize: '8.5pt', textAlign: 'left', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
+                      {(o.steps || []).filter(s => s.active).map((s, i, arr) => (
+                        <span key={s.name} style={{ display: 'inline-block', whiteSpace: 'nowrap' }}>
+                          {s.status === '진행중' ? (
+                            <span 
+                              className="step-highlight print-color-exact" 
+                              style={{ 
+                                backgroundColor: '#e0f2fe', 
+                                color: '#0369a1', 
+                                fontWeight: 'bold', 
+                                padding: '1px 4px', 
+                                borderRadius: '3px', 
+                                border: '1px solid #0284c7',
+                                fontSize: '8.5pt',
+                                WebkitPrintColorAdjust: 'exact',
+                                printColorAdjust: 'exact'
+                              }}
+                            >
+                              ▶ {s.name}{s.date ? `(${s.date})` : ''}
+                            </span>
+                          ) : (
+                            <span style={{ color: s.status === '완료' ? '#059669' : '#6b7280', fontWeight: s.status === '완료' ? 600 : 400, fontSize: '8.5pt' }}>
+                              {s.name}{s.date ? `(${s.date})` : ''}
+                            </span>
+                          )}
+                          {i < arr.length - 1 && <span style={{ color: '#9ca3af', margin: '0 2px' }}>➔</span>}
+                        </span>
+                      ))}
+                    </td>
+                  </tr>
+                );
+              })}
               {filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ padding: '8mm', textAlign: 'center' }}>
+                  <td colSpan={8} style={{ padding: '8mm', textAlign: 'center' }}>
                     출력할 수주/공정 현황 데이터가 없습니다.
                   </td>
                 </tr>

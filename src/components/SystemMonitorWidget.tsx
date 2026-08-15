@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { Paper, SimpleGrid, Group, Text, Box, Badge, Modal, Stack, Card, ActionIcon, Tooltip } from '@mantine/core';
-import { IconBolt, IconUsers, IconDatabase, IconShieldCheck, IconDeviceLaptop, IconDeviceMobile, IconCircleCheck, IconRefresh } from '@tabler/icons-react';
+import { IconBolt, IconUsers, IconDatabase, IconShieldCheck, IconDeviceLaptop, IconDeviceMobile, IconRefresh } from '@tabler/icons-react';
 import { useAuth } from '@/context/AuthContext';
 import { usePathname } from 'next/navigation';
 
@@ -69,7 +69,7 @@ export default function SystemMonitorWidget() {
     }
 
     // Dynamic presence list creation
-    const currentDeviceName = isMobile() ? '📱 모바일 (Android/iOS 스마트폰)' : '💻 PC (Windows 11 / Web Browser)';
+    const currentDeviceName = isMobile() ? '모바일 (Android/iOS 스마트폰)' : 'PC (Windows 11 / Web Browser)';
     const currentDeviceType = isMobile() ? 'mobile' : 'pc';
 
     const now = new Date();
@@ -91,7 +91,7 @@ export default function SystemMonitorWidget() {
         id: 'usr-staff-1',
         name: '현장 가공 1팀 (스마트폰)',
         role: 'staff',
-        device: '📱 모바일 (Galaxy S24 / Android)',
+        device: '모바일 (Galaxy S24 / Android)',
         deviceType: 'mobile',
         currentPage: '공정 관리 (/orders)',
         location: 'A라인 레이저가공실',
@@ -102,7 +102,7 @@ export default function SystemMonitorWidget() {
         id: 'usr-staff-2',
         name: '품질 검사 2팀 (태블릿)',
         role: 'staff',
-        device: '📱 모바일 (iPad Pro / iOS)',
+        device: '모바일 (iPad Pro / iOS)',
         deviceType: 'mobile',
         currentPage: '장비/설비 관리 (/equipment)',
         location: 'B라인 절곡작업장',
@@ -123,7 +123,7 @@ export default function SystemMonitorWidget() {
     }
   }, [isAuthenticated, role, checkHealth]);
 
-  // Requirement 1: Render Widget ONLY for Admin (0056 / role === 'admin')
+  // Render Widget ONLY for Admin (0056 / role === 'admin')
   if (!isAuthenticated || role !== 'admin') {
     return null;
   }
@@ -142,28 +142,17 @@ export default function SystemMonitorWidget() {
         }}
       >
         <Group justify="space-between" align="center" mb={6} px={4}>
-          <Group gap={4} align="center">
-            <Box
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                backgroundColor: '#22c55e',
-                boxShadow: '0 0 8px #22c55e'
-              }}
-            />
-            <Text size="11px" fw={800} style={{ color: '#94a3b8', letterSpacing: '0.5px' }}>
-              TASS REAL-TIME MONITOR
-            </Text>
-          </Group>
-          <Badge size="xs" color="blue" variant="filled" style={{ fontSize: '9px', height: '16px' }}>
+          <Text size="11px" fw={800} style={{ color: '#94a3b8', letterSpacing: '0.5px' }}>
+            TASS REAL-TIME MONITOR
+          </Text>
+          <Badge size="xs" color="gray" variant="outline" style={{ fontSize: '9px', height: '16px', color: '#94a3b8', borderColor: '#475569' }}>
             30s Sync
           </Badge>
         </Group>
 
         {/* 4-Split Grid Layout */}
         <SimpleGrid cols={2} spacing={6}>
-          {/* ① ⚡ 반응속도 */}
+          {/* ① 반응속도 */}
           <Box
             p={6}
             style={{
@@ -173,52 +162,52 @@ export default function SystemMonitorWidget() {
             }}
           >
             <Group gap={4} align="center" mb={2}>
-              <IconBolt size={13} color="#f59e0b" />
+              <IconBolt size={13} style={{ color: '#94a3b8' }} />
               <Text size="10px" fw={700} style={{ color: '#cbd5e1' }}>
                 반응속도
               </Text>
             </Group>
             <Group gap={4} align="center">
-              <Text size="xs" fw={900} style={{ color: '#38bdf8' }}>
+              <Text size="xs" fw={800} style={{ color: '#ffffff' }}>
                 {latency}ms
               </Text>
-              <Text size="9px" style={{ color: '#4ade80' }}>
-                🟢 정상
+              <Text size="9px" style={{ color: '#94a3b8' }}>
+                정상
               </Text>
             </Group>
           </Box>
 
-          {/* ② 👥 현재 접속자 (클릭 시 세부 명단 팝업) */}
+          {/* ② 현재 접속자 (클릭 시 세부 명단 팝업) */}
           <Tooltip label="클릭하여 실시간 동시 접속자 세부 명단 보기">
             <Box
               p={6}
               onClick={() => setUserModalOpen(true)}
               style={{
-                backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
                 borderRadius: '6px',
-                border: '1px solid rgba(59, 130, 246, 0.35)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease-in-out'
               }}
             >
               <Group gap={4} align="center" mb={2}>
-                <IconUsers size={13} color="#60a5fa" />
-                <Text size="10px" fw={700} style={{ color: '#93c5fd' }}>
-                  접속자 🔍
+                <IconUsers size={13} style={{ color: '#94a3b8' }} />
+                <Text size="10px" fw={700} style={{ color: '#cbd5e1' }}>
+                  접속자
                 </Text>
               </Group>
               <Group gap={4} align="center">
-                <Text size="xs" fw={900} style={{ color: '#60a5fa' }}>
+                <Text size="xs" fw={800} style={{ color: '#ffffff' }}>
                   {activeUsersCount}명
                 </Text>
-                <Text size="9px" style={{ color: '#4ade80', fontWeight: 700 }}>
-                  ● 라이브
+                <Text size="9px" style={{ color: '#94a3b8', fontWeight: 600 }}>
+                  라이브
                 </Text>
               </Group>
             </Box>
           </Tooltip>
 
-          {/* ③ 🗄️ DB 안정성 */}
+          {/* ③ DB 안정성 */}
           <Box
             p={6}
             style={{
@@ -228,17 +217,17 @@ export default function SystemMonitorWidget() {
             }}
           >
             <Group gap={4} align="center" mb={2}>
-              <IconDatabase size={13} color="#10b981" />
+              <IconDatabase size={13} style={{ color: '#94a3b8' }} />
               <Text size="10px" fw={700} style={{ color: '#cbd5e1' }}>
                 DB 안정성
               </Text>
             </Group>
-            <Text size="xs" fw={900} style={{ color: '#34d399' }}>
+            <Text size="xs" fw={800} style={{ color: '#ffffff' }}>
               {dbStatus}
             </Text>
           </Box>
 
-          {/* ④ 🛡️ 시스템 상태 */}
+          {/* ④ 시스템 상태 */}
           <Box
             p={6}
             style={{
@@ -248,16 +237,16 @@ export default function SystemMonitorWidget() {
             }}
           >
             <Group gap={4} align="center" mb={2}>
-              <IconShieldCheck size={13} color="#a855f7" />
+              <IconShieldCheck size={13} style={{ color: '#94a3b8' }} />
               <Text size="10px" fw={700} style={{ color: '#cbd5e1' }}>
                 시스템
               </Text>
             </Group>
             <Group gap={4} align="center">
-              <Text size="xs" fw={900} style={{ color: '#c084fc' }}>
+              <Text size="xs" fw={800} style={{ color: '#ffffff' }}>
                 {systemStatus}
               </Text>
-              <Text size="9px" style={{ color: '#4ade80' }}>
+              <Text size="9px" style={{ color: '#94a3b8' }}>
                 안정
               </Text>
             </Group>
@@ -265,47 +254,37 @@ export default function SystemMonitorWidget() {
         </SimpleGrid>
       </Paper>
 
-      {/* Requirement 2: [실시간 동시 접속자 목록] 상세 모달 */}
+      {/* [실시간 동시 접속 세션] 미니멀 B&W 모달 */}
       <Modal
         opened={userModalOpen}
         onClose={() => setUserModalOpen(false)}
         title={
-          <Group gap="xs" align="center">
-            <div style={{
-              backgroundColor: '#2563eb',
-              color: '#ffffff',
-              padding: '3px 8px',
-              borderRadius: '6px',
-              fontWeight: 900,
-              fontSize: '12px'
-            }}>
-              LIVE
-            </div>
-            <Text fw={800} size="md" c="white">⚡ 실시간 동시 접속자 세부 명단 ({activeUsersCount}명)</Text>
-          </Group>
+          <Text fw={800} size="md" c="dark">
+            실시간 접속 세션 ({activeUsersCount}명)
+          </Text>
         }
         centered
-        radius="lg"
+        radius="md"
         size="md"
         styles={{
           content: {
-            backgroundColor: '#0f172a',
-            border: '1px solid #1e293b',
-            color: '#ffffff'
+            backgroundColor: '#ffffff',
+            border: '1px solid #e2e8f0',
+            color: '#0f172a'
           },
           header: {
-            backgroundColor: '#0f172a',
-            borderBottom: '1px solid #1e293b',
-            color: '#ffffff'
+            backgroundColor: '#ffffff',
+            borderBottom: '1px solid #f1f5f9',
+            color: '#0f172a'
           }
         }}
       >
         <Stack gap="sm" pt="xs">
           <Group justify="space-between" align="center">
-            <Text size="xs" c="dimmed">
+            <Text size="xs" c="gray.6">
               Supabase Presence 기반 실시간 세션 모니터링
             </Text>
-            <ActionIcon size="xs" variant="subtle" color="blue" onClick={checkHealth}>
+            <ActionIcon size="xs" variant="subtle" color="gray" onClick={checkHealth}>
               <IconRefresh size={14} />
             </ActionIcon>
           </Group>
@@ -316,57 +295,48 @@ export default function SystemMonitorWidget() {
               p="sm"
               radius="md"
               style={{
-                backgroundColor: item.isCurrentSession ? 'rgba(37, 99, 235, 0.15)' : 'rgba(255, 255, 255, 0.04)',
-                border: item.isCurrentSession ? '1px solid #2563eb' : '1px solid rgba(255, 255, 255, 0.08)'
+                backgroundColor: item.isCurrentSession ? '#f8fafc' : '#ffffff',
+                border: item.isCurrentSession ? '1px solid #cbd5e1' : '1px solid #e2e8f0'
               }}
             >
               <Stack gap={4}>
                 <Group justify="space-between" align="center">
                   <Group gap="xs" align="center">
-                    <Box
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        backgroundColor: '#22c55e',
-                        boxShadow: '0 0 6px #22c55e'
-                      }}
-                    />
-                    <Text fw={800} size="sm" c="white">
+                    <Text fw={800} size="sm" c="dark">
                       {item.name}
                     </Text>
                     {item.isCurrentSession && (
-                      <Badge size="xs" color="blue" variant="filled">내 세션</Badge>
+                      <Badge size="xs" color="gray" variant="filled">내 세션</Badge>
                     )}
                   </Group>
 
                   <Badge
                     size="xs"
-                    color={item.role === 'admin' ? 'blue' : item.role === 'staff' ? 'teal' : 'gray'}
-                    variant="filled"
+                    color="dark"
+                    variant="outline"
                   >
-                    {item.role === 'admin' ? '🔑 관리자 (0056)' : item.role === 'staff' ? '👁️ 현장직원 (1234)' : '게스트'}
+                    {item.role === 'admin' ? '관리자 (0056)' : item.role === 'staff' ? '현장직원 (1234)' : '게스트'}
                   </Badge>
                 </Group>
 
                 <Group gap="md" mt={2}>
                   <Group gap={4} align="center">
                     {item.deviceType === 'pc' ? (
-                      <IconDeviceLaptop size={14} color="#94a3b8" />
+                      <IconDeviceLaptop size={14} style={{ color: '#475569' }} />
                     ) : (
-                      <IconDeviceMobile size={14} color="#94a3b8" />
+                      <IconDeviceMobile size={14} style={{ color: '#475569' }} />
                     )}
-                    <Text size="xs" c="gray.3" fw={600}>
+                    <Text size="xs" c="gray.7" fw={600}>
                       {item.device}
                     </Text>
                   </Group>
                 </Group>
 
                 <Group justify="space-between" align="center" mt={2}>
-                  <Text size="xs" c="blue.3" fw={700}>
-                    📍 현재 화면: {item.currentPage}
+                  <Text size="xs" c="gray.8" fw={700}>
+                    📍 현재 위치: {item.location} ({item.currentPage})
                   </Text>
-                  <Text size="11px" c="dimmed">
+                  <Text size="11px" c="gray.5">
                     {item.connectedAt}
                   </Text>
                 </Group>

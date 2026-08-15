@@ -101,7 +101,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
               <Group gap={4} align="center" wrap="nowrap">
                 {role === 'admin' ? (
                   <>
-                    <Badge visibleFrom="sm" color="blue" size="md" variant="filled" radius="md" leftSection={<IconKey size={12} />} style={{ borderRadius: '6px' }}>
+                    <Badge visibleFrom="sm" color="blue" size="md" variant="filled" radius="md" style={{ borderRadius: '6px' }}>
                       🔑 관리자 (수정권한)
                     </Badge>
                     <Badge hiddenFrom="sm" color="blue" size="xs" variant="filled" radius="md" style={{ borderRadius: '6px', paddingLeft: '4px', paddingRight: '4px' }}>

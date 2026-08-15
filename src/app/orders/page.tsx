@@ -1600,7 +1600,6 @@ export default function OrdersPage() {
                       color="blue.6"
                       variant="filled"
                       size="sm"
-                      leftSection={<IconPrinter size={16} />}
                       onClick={() => handlePrintWorkOrder(order, stepName)}
                     >
                       🖨️ 해당 공정 작업지시서 인쇄

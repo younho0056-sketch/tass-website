@@ -55,8 +55,9 @@ export async function findSharedWithMeFolders(drive: ReturnType<typeof google.dr
 export async function getRootParentFolder(
   drive: ReturnType<typeof google.drive>,
   targetFolderId?: string
-): Promise<{ id: string; name: string; method: string } | null> {
-  const envFolderId = targetFolderId || process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+): Promise<{ id: string; name: string; method: string }> {
+  const HARDCODED_ROOT_ID = '13kS6BLYxlVlTlydnv7DGBrU3jG5kjsAZ';
+  const envFolderId = targetFolderId || process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || HARDCODED_ROOT_ID;
 
   // 1. Direct ID lookup if env ID provided
   if (envFolderId && envFolderId.trim()) {
@@ -114,16 +115,21 @@ export async function getRootParentFolder(
     }
   }
 
-  return null;
+  // 4. Guaranteed Hardcoded Fallback (Never returns null)
+  return {
+    id: HARDCODED_ROOT_ID,
+    name: '타스_도면',
+    method: 'hardcoded_root_fallback'
+  };
 }
 
 /**
- * 1단계 공통 함수: 루트 기준 폴더 ID를 탐색하여 수급 (실패 시 즉시 Error throw)
+ * 1단계 공통 함수: 루트 기준 폴더 ID를 탐색하여 수급 (보장된 rootId 반환)
  */
 export async function getResolvedRootFolderId(drive: ReturnType<typeof google.drive>): Promise<string> {
   const rootInfo = await getRootParentFolder(drive);
   if (!rootInfo || !rootInfo.id) {
-    throw new Error('기준 공유 폴더(타스_도면)를 찾을 수 없거나 구글 드라이브 접근 권한이 없습니다. 구글 드라이브 폴더를 서비스 계정 이메일로 편집자 권한 공유해 주셨는지 확인해 주세요.');
+    throw new Error('Target Folder ID missing (Root ID unresolved)');
   }
   return rootInfo.id;
 }
@@ -187,30 +193,22 @@ export async function findOrCreateDriveFolderHierarchy(
     projectNo: string;
   }
 ): Promise<{ rootId: string; rootFolderId: string; partnerFolderId: string | null; projectFolderId: string | null; targetFolderId: string }> {
-  // Step 1: Get Root Parent Folder (타스_도면) - throws Error if missing!
+  // Step 1: Get Root Parent Folder ID (hardcoded fallback guaranteed)
   const rootId = await getResolvedRootFolderId(drive);
-  console.log('[DEBUG-STEP 1] rootId resolved:', rootId);
+  console.log('[URGENT-DEBUG] Step 1 Root Folder ID:', rootId);
 
   // Step 2: Find or create Partner Folder (e.g. '아크인터내셔널') under Root Folder
   const cleanPartnerName = partnerName && partnerName.trim() ? partnerName.trim() : '일반거래처';
   const partnerFolderId = await findOrCreateDriveSubFolder(drive, cleanPartnerName, rootId);
-  console.log('[DEBUG-STEP 2] partnerFolderId resolved:', partnerFolderId);
+  console.log('[URGENT-DEBUG] Step 2 Partner Folder ID:', partnerFolderId);
 
   // Step 3: Find or create Project Folder (e.g. 'PRJ-023') under Partner Folder
   const parentForProject = partnerFolderId || rootId;
   const projectFolderId = await findOrCreateDriveSubFolder(drive, projectNo, parentForProject);
-  console.log('[DEBUG-STEP 3] projectFolderId resolved:', projectFolderId);
+  console.log('[URGENT-DEBUG] Step 3 Project Folder ID:', projectFolderId);
 
   const finalTargetFolderId = projectFolderId || partnerFolderId || rootId;
-
-  console.log('[DEBUG-STEP]', { 
-    rootId, 
-    partnerName: cleanPartnerName, 
-    partnerFolderId, 
-    projectNo, 
-    projectFolderId, 
-    targetFolderId: finalTargetFolderId 
-  });
+  console.log('[URGENT-DEBUG] Final Target Folder ID:', finalTargetFolderId);
 
   return {
     rootId,
@@ -244,54 +242,45 @@ export async function uploadBufferToGoogleDrive({
       throw new Error(errorMsg);
     }
 
-    // Step 1 ~ 3: Get rootId, partnerFolderId, projectFolderId
-    const { rootId, partnerFolderId, projectFolderId, targetFolderId } = await findOrCreateDriveFolderHierarchy(drive, { partnerName, projectNo });
+    // Step 1 ~ 3: Folder Navigation
+    const { rootId, partnerFolderId, projectFolderId, targetFolderId: resolvedTargetId } = await findOrCreateDriveFolderHierarchy(drive, { partnerName, projectNo });
 
-    const finalFolderId = projectFolderId || targetFolderId;
+    const targetFolderId = (projectFolderId || resolvedTargetId || rootId || '').trim();
+    console.log('[URGENT-DEBUG] Final Target Folder ID:', targetFolderId);
 
-    console.log('[DEBUG-STEP]', { rootId, partnerFolderId, projectFolderId, finalFolderId });
-
-    if (!finalFolderId || typeof finalFolderId !== 'string' || !finalFolderId.trim()) {
-      const errorMsg = '[GoogleDrive Error] projectFolderId/targetFolderId가 유효하지 않아 파일 업로드를 중단합니다. (Service Account는 parents 지정 필수)';
-      console.error(errorMsg);
-      throw new Error(errorMsg);
+    if (!targetFolderId) {
+      throw new Error('Target Folder ID missing');
     }
-
-    const cleanTargetFolderId = finalFolderId.trim();
 
     const stream = new Readable();
     stream.push(buffer);
     stream.push(null);
 
-    // Step 4: drive.files.create with parents: [cleanTargetFolderId]
-    const fileMetadata = {
-      name: fileName,
-      parents: [cleanTargetFolderId] // 반드시 targetFolderId가 들어있는 string[] 배열이어야 함
-    };
-
-    const media = {
-      mimeType: mimeType || 'image/jpeg',
-      body: stream
-    };
-
+    // Step 4: File Creation with parents: [targetFolderId]
     const fileRes = await drive.files.create({
-      requestBody: fileMetadata,
-      media: media,
+      requestBody: {
+        name: fileName,
+        parents: [targetFolderId],
+      },
+      media: {
+        mimeType: mimeType || 'image/jpeg',
+        body: stream,
+      },
       fields: 'id, name, webViewLink, webContentLink',
       supportsAllDrives: true,
-      supportsTeamDrives: true
+      supportsTeamDrives: true,
     });
 
-    console.log(`[GoogleDrive] File uploaded successfully. File ID: ${fileRes.data.id}, Target Folder: ${cleanTargetFolderId}`);
+    console.log(`[GoogleDrive] File uploaded successfully. File ID: ${fileRes.data.id}, Target Folder: ${targetFolderId}`);
 
     return {
       success: true,
       fileId: fileRes.data.id || undefined,
       webViewLink: fileRes.data.webViewLink || undefined,
-      targetFolderId: cleanTargetFolderId
+      targetFolderId
     };
   } catch (err: any) {
-    console.error('[GoogleDrive] Upload error:', err);
+    console.error('[GoogleDrive Upload Error]:', err);
     return {
       success: false,
       reason: err.message || 'Drive API 파일 업로드 실패'

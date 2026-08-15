@@ -11,6 +11,8 @@ import PWAInstallButton from '@/components/PWAInstallButton';
 import AuthModal from '@/components/AuthModal';
 import { useAuth } from '@/context/AuthContext';
 
+import SystemMonitorWidget from '@/components/SystemMonitorWidget';
+
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const [opened, { toggle }] = useDisclosure();
   const pathname = usePathname();
@@ -25,6 +27,16 @@ export default function ClientShell({ children }: { children: React.ReactNode })
       openAuthModal(pathname);
     }
   }, [pathname, isAuthenticated, openAuthModal]);
+
+  // Background prefetching for 0.1s instant menu switching
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const prefetchRoutes = ['/api/orders', '/api/folders', '/api/partners', '/api/estimates'];
+      prefetchRoutes.forEach(url => {
+        fetch(url).catch(() => {});
+      });
+    }
+  }, []);
 
   if (pathname === '/') {
     return (
@@ -137,74 +149,79 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p="md" style={{ backgroundColor: '#ffffff', borderRight: '1px solid #e2e8f0', borderRadius: 0 }}>
-        <Text size="xs" fw={700} c="dimmed" mb="xs" style={{ textTransform: 'uppercase', letterSpacing: '1px' }}>
-          MAIN MENU
-        </Text>
+      <AppShell.Navbar p="md" style={{ backgroundColor: '#ffffff', borderRight: '1px solid #e2e8f0', borderRadius: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <Box>
+          <Text size="xs" fw={700} c="dimmed" mb="xs" style={{ textTransform: 'uppercase', letterSpacing: '1px' }}>
+            MAIN MENU
+          </Text>
 
-        <NavLink
-          component={Link}
-          href="/partners"
-          label="거래처 DB"
-          leftSection={<IconUsers size="1.1rem" stroke={1.5} />}
-          active={pathname === '/partners'}
-          onClick={handleNavClick}
-          style={{ borderRadius: '8px', marginBottom: '4px' }}
-        />
-        <NavLink
-          component={Link}
-          href="/estimates"
-          label="견적 관리"
-          leftSection={<IconFileSpreadsheet size="1.1rem" stroke={1.5} />}
-          active={pathname === '/estimates'}
-          onClick={handleNavClick}
-          style={{ borderRadius: '8px', marginBottom: '4px' }}
-        />
-        <NavLink
-          component={Link}
-          href="/orders"
-          label="공정 관리"
-          leftSection={<IconListCheck size="1.1rem" stroke={1.5} />}
-          active={pathname === '/orders'}
-          onClick={handleNavClick}
-          style={{ borderRadius: '8px', marginBottom: '4px' }}
-        />
-        <NavLink
-          component={Link}
-          href="/support-projects"
-          label="나라 지원사업 공고"
-          leftSection={<IconBuildingBank size="1.1rem" stroke={1.5} />}
-          active={pathname === '/support-projects'}
-          onClick={handleNavClick}
-          style={{ borderRadius: '8px', marginBottom: '4px' }}
-        />
-        <NavLink
-          component={Link}
-          href="/labels"
-          label="송장 출력"
-          leftSection={<IconPrinter size="1.1rem" stroke={1.5} />}
-          active={pathname === '/labels'}
-          onClick={handleNavClick}
-          style={{ borderRadius: '8px', marginBottom: '4px' }}
-        />
-        <NavLink
-          component={Link}
-          href="/equipment"
-          label="장비/설비 관리"
-          leftSection={<IconTools size="1.1rem" stroke={1.5} />}
-          active={pathname === '/equipment'}
-          onClick={handleNavClick}
-          style={{ borderRadius: '8px', marginBottom: '4px' }}
-        />
-        <NavLink
-          component={Link}
-          href="/blog"
-          label="블로그 포스팅 관리"
-          leftSection={<IconFileDescription size="1.1rem" stroke={1.5} />}
-          active={pathname === '/blog'}
-          onClick={handleNavClick}
-          style={{ borderRadius: '8px' }}
-        />
+          <NavLink
+            component={Link}
+            href="/partners"
+            label="거래처 DB"
+            leftSection={<IconUsers size="1.1rem" stroke={1.5} />}
+            active={pathname === '/partners'}
+            onClick={handleNavClick}
+            style={{ borderRadius: '8px', marginBottom: '4px' }}
+          />
+          <NavLink
+            component={Link}
+            href="/estimates"
+            label="견적 관리"
+            leftSection={<IconFileSpreadsheet size="1.1rem" stroke={1.5} />}
+            active={pathname === '/estimates'}
+            onClick={handleNavClick}
+            style={{ borderRadius: '8px', marginBottom: '4px' }}
+          />
+          <NavLink
+            component={Link}
+            href="/orders"
+            label="공정 관리"
+            leftSection={<IconListCheck size="1.1rem" stroke={1.5} />}
+            active={pathname === '/orders'}
+            onClick={handleNavClick}
+            style={{ borderRadius: '8px', marginBottom: '4px' }}
+          />
+          <NavLink
+            component={Link}
+            href="/support-projects"
+            label="나라 지원사업 공고"
+            leftSection={<IconBuildingBank size="1.1rem" stroke={1.5} />}
+            active={pathname === '/support-projects'}
+            onClick={handleNavClick}
+            style={{ borderRadius: '8px', marginBottom: '4px' }}
+          />
+          <NavLink
+            component={Link}
+            href="/labels"
+            label="송장 출력"
+            leftSection={<IconPrinter size="1.1rem" stroke={1.5} />}
+            active={pathname === '/labels'}
+            onClick={handleNavClick}
+            style={{ borderRadius: '8px', marginBottom: '4px' }}
+          />
+          <NavLink
+            component={Link}
+            href="/equipment"
+            label="장비/설비 관리"
+            leftSection={<IconTools size="1.1rem" stroke={1.5} />}
+            active={pathname === '/equipment'}
+            onClick={handleNavClick}
+            style={{ borderRadius: '8px', marginBottom: '4px' }}
+          />
+          <NavLink
+            component={Link}
+            href="/blog"
+            label="블로그 포스팅 관리"
+            leftSection={<IconFileDescription size="1.1rem" stroke={1.5} />}
+            active={pathname === '/blog'}
+            onClick={handleNavClick}
+            style={{ borderRadius: '8px' }}
+          />
+        </Box>
+
+        {/* Real-time 4-Split System Monitor Widget */}
+        <SystemMonitorWidget />
       </AppShell.Navbar>
 
       <AppShell.Main>

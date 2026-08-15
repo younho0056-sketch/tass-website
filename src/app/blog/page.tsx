@@ -12,12 +12,15 @@ import {
   IconFolderPlus, IconUpload, IconWand, IconCopy, IconTrash, 
   IconSearch, IconEye, IconFolderOpen, IconCloudUpload, IconDownload, IconExternalLink
 } from '@tabler/icons-react';
+import useSWR from 'swr';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
 import { useAuth } from '@/context/AuthContext';
 import { compressImage } from '@/lib/imageCompressor';
 
 type Photo = { id: number; url: string };
 type Folder = { id: number; name: string; photos: Photo[] };
+
+const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 const handleOpenGoogleDrive = (folderName: string) => {
   const projectMatch = folderName.match(/PRJ-\d+/i);
@@ -82,21 +85,25 @@ export default function BlogPage() {
   const [generating, setGenerating] = useState(false);
   const [generatedText, setGeneratedText] = useState('');
 
-  const fetchFolders = useCallback(async () => {
-    try {
-      const res = await fetch('/api/folders');
-      const data = await res.json();
-      setFolders(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error(e);
-      setFolders([]);
-    }
-  }, []);
+  // SWR Caching for 0.1s instant rendering
+  const { data: foldersData, mutate: mutateFolders } = useSWR('/api/folders', fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 10000,
+  });
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchFolders();
-  }, [fetchFolders]);
+    if (Array.isArray(foldersData)) {
+      setFolders(foldersData);
+      if (galleryFolder) {
+        const updated = foldersData.find((f: Folder) => f.id === galleryFolder.id);
+        if (updated) setGalleryFolder(updated);
+      }
+    }
+  }, [foldersData, galleryFolder]);
+
+  const fetchFolders = useCallback(async () => {
+    await mutateFolders();
+  }, [mutateFolders]);
 
   const { canEdit, isAuthenticated } = useAuth();
 

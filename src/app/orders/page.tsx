@@ -744,24 +744,112 @@ export default function OrdersPage() {
           </Button>
         </PageHeaderBanner>
 
-        {/* 상태 필터 탭 (수치 통합) */}
-        <SegmentedControl
-          value={tabFilter}
-          onChange={(val: string) => {
-            setTabFilter(val as 'ALL' | 'IN_PROGRESS' | 'URGENT' | 'COMPLETED');
-            if (val !== 'ALL') setFilterStatus(null);
-          }}
-          data={[
-            { label: `진행 중인 공정 (${metrics.inProgressCount}건)`, value: 'IN_PROGRESS' },
-            { label: `🚨 납기 임박 (${metrics.urgentCount}건)`, value: 'URGENT' },
-            { label: `완료된 공정 (${metrics.completedCount}건)`, value: 'COMPLETED' },
-            { label: `전체 보기 (${metrics.totalCount}건)`, value: 'ALL' },
-          ]}
-          size="md"
-          radius="md"
-          className="glass-panel"
-          style={{ padding: '6px' }}
-        />
+        {/* 1. 모바일 전용 스마트폰 위젯형 상단 요약 대시보드 (sm 미만 스크린) */}
+        <div className="block sm:hidden">
+          <SimpleGrid cols={3} spacing="xs">
+            {/* 진행중 위젯 카드 */}
+            <Card 
+              padding="xs" 
+              radius="lg" 
+              style={{ 
+                backgroundColor: tabFilter === 'IN_PROGRESS' ? '#2563eb' : '#ffffff', 
+                color: tabFilter === 'IN_PROGRESS' ? '#ffffff' : '#1e293b',
+                border: tabFilter === 'IN_PROGRESS' ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(37, 99, 235, 0.15)',
+                transition: 'all 0.2s ease'
+              }}
+              onClick={() => {
+                setTabFilter('IN_PROGRESS');
+                setFilterStatus(null);
+              }}
+            >
+              <Stack gap={2} align="center">
+                <Text size="11px" fw={800} style={{ opacity: 0.9 }}>
+                  ▶ 진행중
+                </Text>
+                <Text size="xl" fw={900}>
+                  {metrics.inProgressCount}<span style={{ fontSize: '12px', fontWeight: 600, marginLeft: '2px' }}>건</span>
+                </Text>
+              </Stack>
+            </Card>
+
+            {/* 납기임박 위젯 카드 */}
+            <Card 
+              padding="xs" 
+              radius="lg" 
+              style={{ 
+                backgroundColor: tabFilter === 'URGENT' ? '#ef4444' : '#ffffff', 
+                color: tabFilter === 'URGENT' ? '#ffffff' : '#1e293b',
+                border: tabFilter === 'URGENT' ? '2px solid #ef4444' : '1px solid #fca5a5',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(239, 68, 68, 0.15)',
+                transition: 'all 0.2s ease'
+              }}
+              onClick={() => {
+                setTabFilter('URGENT');
+                setFilterStatus(null);
+              }}
+            >
+              <Stack gap={2} align="center">
+                <Text size="11px" fw={800} style={{ opacity: 0.9 }}>
+                  🚨 납기임박
+                </Text>
+                <Text size="xl" fw={900} c={tabFilter === 'URGENT' ? 'white' : 'red.7'}>
+                  {metrics.urgentCount}<span style={{ fontSize: '12px', fontWeight: 600, marginLeft: '2px' }}>건</span>
+                </Text>
+              </Stack>
+            </Card>
+
+            {/* 완료 위젯 카드 */}
+            <Card 
+              padding="xs" 
+              radius="lg" 
+              style={{ 
+                backgroundColor: tabFilter === 'COMPLETED' ? '#10b981' : '#ffffff', 
+                color: tabFilter === 'COMPLETED' ? '#ffffff' : '#1e293b',
+                border: tabFilter === 'COMPLETED' ? '2px solid #10b981' : '1px solid #a7f3d0',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.15)',
+                transition: 'all 0.2s ease'
+              }}
+              onClick={() => {
+                setTabFilter('COMPLETED');
+                setFilterStatus(null);
+              }}
+            >
+              <Stack gap={2} align="center">
+                <Text size="11px" fw={800} style={{ opacity: 0.9 }}>
+                  ✓ 완료
+                </Text>
+                <Text size="xl" fw={900} c={tabFilter === 'COMPLETED' ? 'white' : 'teal.8'}>
+                  {metrics.completedCount}<span style={{ fontSize: '12px', fontWeight: 600, marginLeft: '2px' }}>건</span>
+                </Text>
+              </Stack>
+            </Card>
+          </SimpleGrid>
+        </div>
+
+        {/* 2. 데스크톱/태블릿 전용 상태 필터 탭 (sm 이상 스크린) */}
+        <div className="hidden sm:block">
+          <SegmentedControl
+            value={tabFilter}
+            onChange={(val: string) => {
+              setTabFilter(val as 'ALL' | 'IN_PROGRESS' | 'URGENT' | 'COMPLETED');
+              if (val !== 'ALL') setFilterStatus(null);
+            }}
+            data={[
+              { label: `진행 중인 공정 (${metrics.inProgressCount}건)`, value: 'IN_PROGRESS' },
+              { label: `🚨 납기 임박 (${metrics.urgentCount}건)`, value: 'URGENT' },
+              { label: `완료된 공정 (${metrics.completedCount}건)`, value: 'COMPLETED' },
+              { label: `전체 보기 (${metrics.totalCount}건)`, value: 'ALL' },
+            ]}
+            size="md"
+            radius="md"
+            className="glass-panel"
+            style={{ padding: '6px', width: '100%' }}
+          />
+        </div>
 
         {/* 검색 & 상세 상태 필터 */}
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md" className="glass-panel" p="md">

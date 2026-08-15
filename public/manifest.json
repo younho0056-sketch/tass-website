@@ -3,17 +3,14 @@
   "short_name": "TASS",
   "description": "TASS 현장 지시용 공정 현황 모니터링 및 수주 관리 시스템",
   "start_url": "/",
+  "id": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "orientation": "any",
   "icons": [
-    {
-      "src": "/icons/icon.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
     {
       "src": "/icons/icon-192.png",
       "sizes": "192x192",
@@ -22,6 +19,12 @@
     },
     {
       "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

@@ -12,12 +12,14 @@ export default function AuthModal() {
   const [error, setError] = useState<string | null>(null);
   const [showPin, setShowPin] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isUserInteracted = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
     if (isAuthModalOpen) {
       setPin('');
       setError(null);
+      isUserInteracted.current = false;
       setTimeout(() => {
         if (inputRef.current) {
           inputRef.current.focus();
@@ -36,6 +38,7 @@ export default function AuthModal() {
     if (result.success) {
       setPin('');
       setError(null);
+      isUserInteracted.current = false;
       if (targetUrl) {
         router.push(targetUrl);
       }
@@ -49,25 +52,32 @@ export default function AuthModal() {
     setPin(val);
     setError(null);
 
-    // Auto-submit immediately when 4 digits are entered
-    if (val.length === 4) {
+    // Auto-submit only when user physically typed/interacted and 4 digits are entered
+    if (isUserInteracted.current && val.length === 4) {
       executeLogin(val);
     }
   };
 
+  const markUserInteracted = () => {
+    isUserInteracted.current = true;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    isUserInteracted.current = true;
     executeLogin(pin);
   };
 
   const handleClose = () => {
     setPin('');
     setError(null);
+    isUserInteracted.current = false;
     closeAuthModal();
     router.push('/');
   };
 
   const handleQuickFill = (code: string) => {
+    isUserInteracted.current = true;
     setPin(code);
     setError(null);
     executeLogin(code);
@@ -136,15 +146,22 @@ export default function AuthModal() {
             </Alert>
           )}
 
-          {/* Large Mobile Numeric Keypad Input */}
+          {/* Large Mobile Numeric Keypad Input with Autofill Protection */}
           <div style={{ position: 'relative' }}>
             <input
               ref={inputRef}
+              name="tass_pin_no_autofill"
               type={showPin ? "text" : "password"}
               inputMode="numeric"
               pattern="[0-9]*"
               maxLength={4}
+              autoComplete="new-password"
+              autoCapitalize="off"
+              spellCheck={false}
               value={pin}
+              onKeyDown={markUserInteracted}
+              onPointerDown={markUserInteracted}
+              onTouchStart={markUserInteracted}
               onChange={handlePinChange}
               placeholder="••••"
               autoFocus

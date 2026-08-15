@@ -20,6 +20,7 @@ import PageHeaderBanner from '@/components/PageHeaderBanner';
 import { useAuth } from '@/context/AuthContext';
 import OrderRow, { Order, ProcessStep } from '@/components/OrderRow';
 import OrderCard from '@/components/OrderCard';
+import { compressImage } from '@/lib/imageCompressor';
 
 type PartnerDetail = {
   id: number;
@@ -255,16 +256,22 @@ export default function OrdersPage() {
     
     notifications.show({
       id: `upload-${order.id}`,
-      title: '📸 현장 사진 전송 중...',
-      message: `${projectNo} (${order.partnerName}) 프로젝트 폴더로 무저장 자동 업로드 중입니다.`,
+      title: '📸 현장 사진 실시간 압축 및 전송 중...',
+      message: `${projectNo} (${order.partnerName}) 프로젝트 폴더로 무저장 자동 전송 중입니다.`,
       color: 'blue',
       loading: true,
       autoClose: false
     });
 
     try {
+      // 1. Client-side Canvas Image Compression
+      const compressedFiles = await Promise.all(
+        files.map(file => compressImage(file, 1200, 1200, 0.75))
+      );
+
+      // 2. Background Upload to Server API
       const formData = new FormData();
-      files.forEach(f => formData.append('files', f));
+      compressedFiles.forEach(f => formData.append('files', f));
 
       const res = await fetch(`/api/orders/${order.id}/photos`, {
         method: 'POST',
@@ -280,10 +287,10 @@ export default function OrdersPage() {
       notifications.update({
         id: `upload-${order.id}`,
         title: '✅ 현장 사진 무저장 자동 업로드 완료!',
-        message: `${projectNo} 프로젝트 폴더에 ${files.length}장의 사진이 누적 저장되었습니다. (추후 블로그 포스팅 관리에서 사용 가능)`,
+        message: `${projectNo} 프로젝트 폴더에 ${files.length}장의 사진이 성공적으로 저장되었습니다. (/blog 메뉴에서 확인 및 원고 작성 가능)`,
         color: 'teal',
         loading: false,
-        autoClose: 4500
+        autoClose: 5000
       });
     } catch (err: any) {
       console.error('Field photo upload error:', err);

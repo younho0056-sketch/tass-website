@@ -7,9 +7,10 @@ import {
   Loader, Textarea, CopyButton, Checkbox, ActionIcon, Tooltip
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconFolderPlus, IconUpload, IconWand, IconCopy, IconTrash } from '@tabler/icons-react';
+import { IconFolderPlus, IconUpload, IconWand, IconCopy, IconTrash, IconSearch, IconEye } from '@tabler/icons-react';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
 import { useAuth } from '@/context/AuthContext';
+import { compressImage } from '@/lib/imageCompressor';
 
 type Photo = { id: number; url: string };
 type Folder = { id: number; name: string; photos: Photo[] };
@@ -19,6 +20,8 @@ export default function BlogPage() {
   const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
   const [opened, { open, close }] = useDisclosure(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [galleryFolder, setGalleryFolder] = useState<Folder | null>(null);
   
   // Blog Generation State
   const [genOpened, { open: openGen, close: closeGen }] = useDisclosure(false);
@@ -43,7 +46,7 @@ export default function BlogPage() {
     fetchFolders();
   }, [fetchFolders]);
 
-  const { canEdit } = useAuth();
+  const { canEdit, isAuthenticated } = useAuth();
 
   const handleCreateFolder = async () => {
     if (!canEdit) {
@@ -122,13 +125,18 @@ export default function BlogPage() {
   };
 
   const handleUpload = async (files: File[] | null, folderId: number) => {
-    if (!canEdit) {
-      alert('직원 권한(1234)은 현장 사진 업로드가 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+    if (!isAuthenticated) {
+      alert('사진 업로드를 위해 시스템 접속 인증이 필요합니다.');
       return;
     }
     if (!files || files.length === 0) return;
+
+    const compressedFiles = await Promise.all(
+      files.map((file) => compressImage(file, 1200, 1200, 0.75))
+    );
+
     const formData = new FormData();
-    files.forEach((file) => formData.append('files', file));
+    compressedFiles.forEach((file) => formData.append('files', file));
 
     await fetch(`/api/folders/${folderId}/photos`, {
       method: 'POST',
@@ -136,6 +144,10 @@ export default function BlogPage() {
     });
     fetchFolders();
   };
+
+  const filteredFolders = folders.filter(f => 
+    !searchQuery || f.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const generateBlogContent = (folder: Folder, kws: string) => {
     const keywords = kws.split(',').map(k => k.trim()).filter(Boolean);
@@ -223,14 +235,32 @@ export default function BlogPage() {
         </Button>
       </PageHeaderBanner>
 
-      {folders.length === 0 && (
+      {/* 프로젝트 검색바 및 관리 툴바 */}
+      <Card p="sm" radius="md" className="glass-panel">
+        <Group justify="space-between" align="center">
+          <TextInput
+            placeholder="프로젝트 번호(PRJ-XXX) 또는 작업명 검색..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.currentTarget.value)}
+            leftSection={<IconSearch size={16} />}
+            style={{ flex: 1, maxWidth: 400 }}
+          />
+          <Text size="xs" c="dimmed" fw={600}>
+            총 {filteredFolders.length}개 프로젝트 폴더
+          </Text>
+        </Group>
+      </Card>
+
+      {filteredFolders.length === 0 && (
         <Card p="xl" radius="md" className="glass-panel" style={{ textAlign: 'center' }}>
-          <Text c="dimmed" py="lg">등록된 프로젝트 폴더가 없습니다. [새 프로젝트 폴더] 버튼을 클릭하여 폴더를 생성해주세요.</Text>
+          <Text c="dimmed" py="lg">
+            {searchQuery ? `'${searchQuery}' 검색 결과에 해당하는 프로젝트 폴더가 없습니다.` : '등록된 프로젝트 폴더가 없습니다. [새 프로젝트 폴더] 버튼을 클릭하거나 수주 관리에서 현장 촬영 시 자동 생성됩니다.'}
+          </Text>
         </Card>
       )}
 
       <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg">
-        {folders.map(folder => (
+        {filteredFolders.map(folder => (
           <Card key={folder.id} shadow="sm" padding="lg" radius="md" className="glass-panel">
             <Group justify="space-between" align="center" mb="xs">
               <Group gap="xs" style={{ flex: 1, overflow: 'hidden' }}>
@@ -238,13 +268,19 @@ export default function BlogPage() {
                   checked={selectedFolderIds.includes(folder.id)} 
                   onChange={() => toggleFolderSelection(folder.id)} 
                 />
-                <Text fw={700} size="md" truncate="end" style={{ maxWidth: 160 }}>
-                  {folder.name}
+                <Text 
+                  fw={800} 
+                  size="md" 
+                  truncate="end" 
+                  style={{ maxWidth: 160, cursor: 'pointer' }}
+                  onClick={() => setGalleryFolder(folder)}
+                >
+                  📁 {folder.name}
                 </Text>
               </Group>
 
               <Group gap={4} wrap="nowrap">
-                <FileButton onChange={(files) => handleUpload(files, folder.id)} accept="image/png,image/jpeg" multiple>
+                <FileButton onChange={(files) => handleUpload(files, folder.id)} accept="image/*" multiple>
                   {(props) => (
                     <Button {...props} variant="light" color="gray" size="xs" leftSection={<IconUpload size={13} />}>
                       사진 추가
@@ -262,7 +298,13 @@ export default function BlogPage() {
 
             <Text size="xs" c="dimmed" mb="sm">업로드된 현장 사진: {folder.photos.length}장</Text>
 
-            <SimpleGrid cols={3} spacing="xs" mb="md">
+            <SimpleGrid 
+              cols={3} 
+              spacing="xs" 
+              mb="md" 
+              style={{ cursor: folder.photos.length > 0 ? 'pointer' : 'default' }}
+              onClick={() => folder.photos.length > 0 && setGalleryFolder(folder)}
+            >
               {folder.photos.slice(0, 3).map(photo => (
                 <Image key={photo.id} src={photo.url} alt="현장 사진" h={65} fallbackSrc="https://placehold.co/60x60?text=IMG" radius="sm" fit="cover" />
               ))}
@@ -276,19 +318,54 @@ export default function BlogPage() {
               )}
             </SimpleGrid>
 
-            <Button 
-              fullWidth 
-              variant="outline" 
-              color="dark"
-              leftSection={<IconWand size={16} />}
-              onClick={() => openGeneratorModal(folder)}
-              disabled={folder.photos.length === 0}
-            >
-              블로그 템플릿 작성
-            </Button>
+            <Group gap="xs">
+              <Button 
+                style={{ flex: 1 }}
+                variant="outline" 
+                color="dark"
+                leftSection={<IconWand size={16} />}
+                onClick={() => openGeneratorModal(folder)}
+                disabled={folder.photos.length === 0}
+              >
+                블로그 템플릿 작성
+              </Button>
+              {folder.photos.length > 0 && (
+                <Tooltip label="전체 사진 갤러리 크게 보기">
+                  <ActionIcon variant="light" color="blue" size="lg" onClick={() => setGalleryFolder(folder)}>
+                    <IconEye size={18} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+            </Group>
           </Card>
         ))}
       </SimpleGrid>
+
+      {/* 현장 사진 갤러리 Modal */}
+      <Modal 
+        opened={!!galleryFolder} 
+        onClose={() => setGalleryFolder(null)} 
+        title={<Text fw={800} size="lg">📸 {galleryFolder?.name} 현장 사진 갤러리 ({galleryFolder?.photos.length || 0}장)</Text>}
+        size="xl"
+      >
+        <Stack gap="md">
+          <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+            {galleryFolder?.photos.map((photo, index) => (
+              <Card key={photo.id} p="xs" radius="md" style={{ border: '1px solid #e2e8f0' }}>
+                <Image src={photo.url} alt={`현장 사진 ${index + 1}`} radius="sm" h={200} fit="cover" />
+                <Text size="xs" c="dimmed" mt={6} ta="center" fw={600}>
+                  사진 #{index + 1}
+                </Text>
+              </Card>
+            ))}
+          </SimpleGrid>
+          <Group justify="flex-end" mt="md">
+            <Button variant="light" color="gray" onClick={() => setGalleryFolder(null)}>
+              닫기
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal opened={opened} onClose={close} title="새 프로젝트 폴더 만들기">
         <Stack gap="md">

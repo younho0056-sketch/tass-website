@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Paper, SimpleGrid, Group, Text, Box, Badge, Modal, Stack, Card, ActionIcon, Tooltip } from '@mantine/core';
 import { IconBolt, IconUsers, IconDatabase, IconShieldCheck, IconDeviceLaptop, IconDeviceMobile, IconRefresh } from '@tabler/icons-react';
 import { useAuth } from '@/context/AuthContext';
 import { usePathname } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 type UserPresence = {
   id: string;
@@ -24,10 +25,14 @@ export default function SystemMonitorWidget() {
 
   const [latency, setLatency] = useState<number>(24);
   const [dbStatus, setDbStatus] = useState<'100% 정상' | '점검중'>('100% 정상');
-  const [activeUsersCount, setActiveUsersCount] = useState<number>(3);
+  const [activeUsersCount, setActiveUsersCount] = useState<number>(1);
   const [systemStatus, setSystemStatus] = useState<'Online' | 'Offline'>('Online');
   const [userModalOpen, setUserModalOpen] = useState<boolean>(false);
   const [presenceList, setPresenceList] = useState<UserPresence[]>([]);
+
+  const sessionIdRef = useRef<string>(
+    `session-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+  );
 
   // Page name mapping helper
   const getPageName = (path: string) => {
@@ -67,61 +72,83 @@ export default function SystemMonitorWidget() {
       setLatency(42);
       setSystemStatus('Online');
     }
+  }, []);
 
-    // Dynamic presence list creation
-    const currentDeviceName = isMobile() ? '모바일 (Android/iOS 스마트폰)' : 'PC (Windows 11 / Web Browser)';
+  // Supabase Realtime Presence Channel Subscription
+  useEffect(() => {
+    if (!isAuthenticated || role !== 'admin') return;
+
+    checkHealth();
+
+    const sessionId = sessionIdRef.current;
+    const currentDeviceName = isMobile() ? '모바일 (Android/iOS)' : 'PC (Windows / Web Browser)';
     const currentDeviceType = isMobile() ? 'mobile' : 'pc';
-
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
-    const mockPresence: UserPresence[] = [
-      {
-        id: 'usr-admin-1',
-        name: '최윤호 대표 (관리자)',
-        role: 'admin',
-        device: currentDeviceName,
-        deviceType: currentDeviceType,
-        currentPage: getPageName(pathname),
-        location: '부산 사상 본사 사무실',
-        connectedAt: `현재 접속중 (${timeStr})`,
-        isCurrentSession: true
+    const mySession: UserPresence = {
+      id: sessionId,
+      name: role === 'admin' ? '최윤호 대표 (관리자)' : '현장 직원',
+      role: role || 'admin',
+      device: currentDeviceName,
+      deviceType: currentDeviceType,
+      currentPage: getPageName(pathname),
+      location: '본사 관리센터',
+      connectedAt: `현재 접속중 (${timeStr})`,
+      isCurrentSession: true
+    };
+
+    const channel = supabase.channel('tass-realtime-presence', {
+      config: {
+        presence: {
+          key: sessionId,
+        },
       },
-      {
-        id: 'usr-staff-1',
-        name: '현장 가공 1팀 (스마트폰)',
-        role: 'staff',
-        device: '모바일 (Galaxy S24 / Android)',
-        deviceType: 'mobile',
-        currentPage: '공정 관리 (/orders)',
-        location: 'A라인 레이저가공실',
-        connectedAt: '2분 전 접속',
-        isCurrentSession: false
-      },
-      {
-        id: 'usr-staff-2',
-        name: '품질 검사 2팀 (태블릿)',
-        role: 'staff',
-        device: '모바일 (iPad Pro / iOS)',
-        deviceType: 'mobile',
-        currentPage: '장비/설비 관리 (/equipment)',
-        location: 'B라인 절곡작업장',
-        connectedAt: '4분 전 접속',
-        isCurrentSession: false
+    });
+
+    const updatePresenceState = () => {
+      const state = channel.presenceState();
+      const activePresences: UserPresence[] = [];
+
+      Object.keys(state).forEach(key => {
+        const presences = state[key] as any[];
+        if (presences && presences.length > 0) {
+          const latest = presences[presences.length - 1];
+          if (latest) {
+            activePresences.push({
+              ...latest,
+              isCurrentSession: key === sessionId || latest.id === sessionId,
+            });
+          }
+        }
+      });
+
+      if (activePresences.length === 0) {
+        activePresences.push(mySession);
       }
-    ];
 
-    setPresenceList(mockPresence);
-    setActiveUsersCount(mockPresence.length);
-  }, [pathname, isMobile]);
+      setPresenceList(activePresences);
+      setActiveUsersCount(activePresences.length);
+    };
 
-  useEffect(() => {
-    if (isAuthenticated && role === 'admin') {
-      checkHealth();
-      const interval = setInterval(checkHealth, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [isAuthenticated, role, checkHealth]);
+    channel
+      .on('presence', { event: 'sync' }, updatePresenceState)
+      .on('presence', { event: 'join' }, updatePresenceState)
+      .on('presence', { event: 'leave' }, updatePresenceState)
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track(mySession);
+        } else {
+          setPresenceList([mySession]);
+          setActiveUsersCount(1);
+        }
+      });
+
+    return () => {
+      channel.untrack();
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated, role, pathname, isMobile, checkHealth]);
 
   // Render Widget ONLY for Admin (0056 / role === 'admin')
   if (!isAuthenticated || role !== 'admin') {
@@ -289,60 +316,68 @@ export default function SystemMonitorWidget() {
             </ActionIcon>
           </Group>
 
-          {presenceList.map(item => (
-            <Card
-              key={item.id}
-              p="sm"
-              radius="md"
-              style={{
-                backgroundColor: item.isCurrentSession ? '#f8fafc' : '#ffffff',
-                border: item.isCurrentSession ? '1px solid #cbd5e1' : '1px solid #e2e8f0'
-              }}
-            >
-              <Stack gap={4}>
-                <Group justify="space-between" align="center">
-                  <Group gap="xs" align="center">
-                    <Text fw={800} size="sm" c="dark">
-                      {item.name}
-                    </Text>
-                    {item.isCurrentSession && (
-                      <Badge size="xs" color="gray" variant="filled">내 세션</Badge>
-                    )}
+          {presenceList.length === 0 ? (
+            <Paper p="md" radius="md" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+              <Text size="xs" c="gray.6" fw={600}>
+                현재 접속 중인 다른 사용자가 없습니다.
+              </Text>
+            </Paper>
+          ) : (
+            presenceList.map(item => (
+              <Card
+                key={item.id}
+                p="sm"
+                radius="md"
+                style={{
+                  backgroundColor: item.isCurrentSession ? '#f8fafc' : '#ffffff',
+                  border: item.isCurrentSession ? '1px solid #cbd5e1' : '1px solid #e2e8f0'
+                }}
+              >
+                <Stack gap={4}>
+                  <Group justify="space-between" align="center">
+                    <Group gap="xs" align="center">
+                      <Text fw={800} size="sm" c="dark">
+                        {item.name}
+                      </Text>
+                      {item.isCurrentSession && (
+                        <Badge size="xs" color="gray" variant="filled">내 세션</Badge>
+                      )}
+                    </Group>
+
+                    <Badge
+                      size="xs"
+                      color="dark"
+                      variant="outline"
+                    >
+                      {item.role === 'admin' ? '관리자 (0056)' : item.role === 'staff' ? '현장직원 (1234)' : '게스트'}
+                    </Badge>
                   </Group>
 
-                  <Badge
-                    size="xs"
-                    color="dark"
-                    variant="outline"
-                  >
-                    {item.role === 'admin' ? '관리자 (0056)' : item.role === 'staff' ? '현장직원 (1234)' : '게스트'}
-                  </Badge>
-                </Group>
+                  <Group gap="md" mt={2}>
+                    <Group gap={4} align="center">
+                      {item.deviceType === 'pc' ? (
+                        <IconDeviceLaptop size={14} style={{ color: '#475569' }} />
+                      ) : (
+                        <IconDeviceMobile size={14} style={{ color: '#475569' }} />
+                      )}
+                      <Text size="xs" c="gray.7" fw={600}>
+                        {item.device}
+                      </Text>
+                    </Group>
+                  </Group>
 
-                <Group gap="md" mt={2}>
-                  <Group gap={4} align="center">
-                    {item.deviceType === 'pc' ? (
-                      <IconDeviceLaptop size={14} style={{ color: '#475569' }} />
-                    ) : (
-                      <IconDeviceMobile size={14} style={{ color: '#475569' }} />
-                    )}
-                    <Text size="xs" c="gray.7" fw={600}>
-                      {item.device}
+                  <Group justify="space-between" align="center" mt={2}>
+                    <Text size="xs" c="gray.8" fw={700}>
+                      📍 현재 위치: {item.location} ({item.currentPage})
+                    </Text>
+                    <Text size="11px" c="gray.5">
+                      {item.connectedAt}
                     </Text>
                   </Group>
-                </Group>
-
-                <Group justify="space-between" align="center" mt={2}>
-                  <Text size="xs" c="gray.8" fw={700}>
-                    📍 현재 위치: {item.location} ({item.currentPage})
-                  </Text>
-                  <Text size="11px" c="gray.5">
-                    {item.connectedAt}
-                  </Text>
-                </Group>
-              </Stack>
-            </Card>
-          ))}
+                </Stack>
+              </Card>
+            ))
+          )}
         </Stack>
       </Modal>
     </>

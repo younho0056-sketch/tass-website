@@ -7,13 +7,20 @@ import {
   Loader, Textarea, CopyButton, Checkbox, ActionIcon, Tooltip
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconFolderPlus, IconUpload, IconWand, IconCopy, IconTrash, IconSearch, IconEye } from '@tabler/icons-react';
+import { IconFolderPlus, IconUpload, IconWand, IconCopy, IconTrash, IconSearch, IconEye, IconFolderOpen } from '@tabler/icons-react';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
 import { useAuth } from '@/context/AuthContext';
 import { compressImage } from '@/lib/imageCompressor';
 
 type Photo = { id: number; url: string };
 type Folder = { id: number; name: string; photos: Photo[] };
+
+const handleOpenGoogleDrive = (folderName: string) => {
+  const projectMatch = folderName.match(/PRJ-\d+/i);
+  const searchTerm = projectMatch ? projectMatch[0] : folderName;
+  const searchUrl = `https://drive.google.com/drive/u/0/search?q=${encodeURIComponent(searchTerm)}`;
+  window.open(searchUrl, '_blank', 'noopener,noreferrer');
+};
 
 export default function BlogPage() {
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -323,16 +330,29 @@ export default function BlogPage() {
                 style={{ flex: 1 }}
                 variant="outline" 
                 color="dark"
-                leftSection={<IconWand size={16} />}
+                size="xs"
+                leftSection={<IconWand size={15} />}
                 onClick={() => openGeneratorModal(folder)}
                 disabled={folder.photos.length === 0}
               >
                 블로그 템플릿 작성
               </Button>
+              <Tooltip label={`구글 드라이브 내 [${folder.name}] 프로젝트 폴더 직결 바로가기 (사진 확인/다운로드)`}>
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="blue"
+                  leftSection={<IconFolderOpen size={15} />}
+                  onClick={() => handleOpenGoogleDrive(folder.name)}
+                  style={{ fontWeight: 700 }}
+                >
+                  드라이브 폴더
+                </Button>
+              </Tooltip>
               {folder.photos.length > 0 && (
                 <Tooltip label="전체 사진 갤러리 크게 보기">
-                  <ActionIcon variant="light" color="blue" size="lg" onClick={() => setGalleryFolder(folder)}>
-                    <IconEye size={18} />
+                  <ActionIcon variant="light" color="blue" size="md" onClick={() => setGalleryFolder(folder)}>
+                    <IconEye size={17} />
                   </ActionIcon>
                 </Tooltip>
               )}
@@ -345,7 +365,23 @@ export default function BlogPage() {
       <Modal 
         opened={!!galleryFolder} 
         onClose={() => setGalleryFolder(null)} 
-        title={<Text fw={800} size="lg">📸 {galleryFolder?.name} 현장 사진 갤러리 ({galleryFolder?.photos.length || 0}장)</Text>}
+        title={
+          <Group justify="space-between" align="center" style={{ width: '100%' }}>
+            <Text fw={800} size="lg">📸 {galleryFolder?.name} 현장 사진 갤러리 ({galleryFolder?.photos.length || 0}장)</Text>
+            {galleryFolder && (
+              <Button
+                size="xs"
+                variant="light"
+                color="blue"
+                leftSection={<IconFolderOpen size={14} />}
+                onClick={() => handleOpenGoogleDrive(galleryFolder.name)}
+                style={{ fontWeight: 700, marginRight: '16px' }}
+              >
+                구글 드라이브 폴더 열기
+              </Button>
+            )}
+          </Group>
+        }
         size="xl"
       >
         <Stack gap="md">

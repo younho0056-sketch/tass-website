@@ -52,9 +52,7 @@ const OrderRow = memo(function OrderRow({
   onDelete,
   onShowPartnerDetail,
   onPrintSingleOrderInvoice,
-  onUploadPhotos
 }: OrderRowProps) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const displayProjectNo = order.projectNo || `PRJ-${String(order.id).padStart(3, '0')}`;
 
   const handleOpenDrawing = () => {
@@ -66,16 +64,12 @@ const OrderRow = memo(function OrderRow({
     }
   };
 
-  const handleCameraClick = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0 && onUploadPhotos) {
-      onUploadPhotos(order, Array.from(e.target.files));
-      e.target.value = '';
+  const handleOpenDriveCamera = () => {
+    if (order.drawingUrl && order.drawingUrl.trim()) {
+      window.open(order.drawingUrl.trim(), '_blank', 'noopener,noreferrer');
+    } else {
+      const searchUrl = `https://drive.google.com/drive/u/0/search?q=${encodeURIComponent(displayProjectNo)}`;
+      window.open(searchUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -186,23 +180,14 @@ const OrderRow = memo(function OrderRow({
         </Stack>
       </Table.Td>
       <Table.Td>
-        <input
-          type="file"
-          ref={fileInputRef}
-          accept="image/*"
-          capture="environment"
-          multiple
-          style={{ display: 'none' }}
-          onChange={handleFileChange}
-        />
         <Group gap={4} wrap="nowrap">
           <Tooltip label={order.drawingUrl && order.drawingUrl.trim() ? "등록된 개별 도면 드라이브 열기" : `구글 드라이브 [${displayProjectNo}] 도면 폴더 자동 검색`}>
             <ActionIcon color={order.drawingUrl && order.drawingUrl.trim() ? "teal.7" : "blue.6"} variant="light" size="sm" onClick={handleOpenDrawing}>
               <IconFolderOpen size={17} />
             </ActionIcon>
           </Tooltip>
-          <Tooltip label={`현장 촬영 무저장 자동 업로드 (${displayProjectNo})`}>
-            <ActionIcon color="indigo.6" variant="filled" size="sm" onClick={handleCameraClick}>
+          <Tooltip label={`구글 드라이브 [${displayProjectNo}] 폴더 직결 이동하여 카메라 촬영/사진 업로드`}>
+            <ActionIcon color="indigo.6" variant="filled" size="sm" onClick={handleOpenDriveCamera}>
               <IconCamera size={16} />
             </ActionIcon>
           </Tooltip>

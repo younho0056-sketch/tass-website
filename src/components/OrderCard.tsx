@@ -14,7 +14,6 @@ interface OrderCardProps {
   onDelete: (id: number) => void;
   onShowPartnerDetail: (partnerName: string, order?: Order) => void;
   onPrintSingleOrderInvoice: (order: Order) => void;
-  onUploadPhotos: (order: Order, files: File[]) => void;
 }
 
 const OrderCard = memo(function OrderCard({
@@ -26,9 +25,7 @@ const OrderCard = memo(function OrderCard({
   onDelete,
   onShowPartnerDetail,
   onPrintSingleOrderInvoice,
-  onUploadPhotos
 }: OrderCardProps) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const displayProjectNo = order.projectNo || `PRJ-${String(order.id).padStart(3, '0')}`;
 
   const handleOpenDrawing = () => {
@@ -40,18 +37,12 @@ const OrderCard = memo(function OrderCard({
     }
   };
 
-  const handleCameraClick = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const filesArray = Array.from(e.target.files);
-      onUploadPhotos(order, filesArray);
-      // Reset input value so same camera shot can be re-triggered
-      e.target.value = '';
+  const handleOpenDriveCamera = () => {
+    if (order.drawingUrl && order.drawingUrl.trim()) {
+      window.open(order.drawingUrl.trim(), '_blank', 'noopener,noreferrer');
+    } else {
+      const searchUrl = `https://drive.google.com/drive/u/0/search?q=${encodeURIComponent(displayProjectNo)}`;
+      window.open(searchUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -67,17 +58,6 @@ const OrderCard = memo(function OrderCard({
         marginBottom: '12px'
       }}
     >
-      {/* Hidden Mobile Camera Input */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        accept="image/*"
-        capture="environment"
-        multiple
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
-
       {/* Header Row: Status Badge, Project No, Partner Name */}
       <Stack gap="xs">
         <Group justify="space-between" align="center">
@@ -188,17 +168,19 @@ const OrderCard = memo(function OrderCard({
               📐 도면
             </Button>
 
-            <Button
-              size="xs"
-              variant="filled"
-              color="indigo"
-              leftSection={<IconCamera size={14} />}
-              onClick={handleCameraClick}
-              radius="md"
-              style={{ fontWeight: 700, boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)' }}
-            >
-              📸 현장촬영
-            </Button>
+            <Tooltip label={`구글 드라이브 프로젝트 [${displayProjectNo}] 폴더로 직결 이동하여 카메라 촬영/사진 업로드`}>
+              <Button
+                size="xs"
+                variant="filled"
+                color="indigo"
+                leftSection={<IconCamera size={14} />}
+                onClick={handleOpenDriveCamera}
+                radius="md"
+                style={{ fontWeight: 700, boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)' }}
+              >
+                📸 현장촬영
+              </Button>
+            </Tooltip>
           </Group>
 
           <Group gap={4}>

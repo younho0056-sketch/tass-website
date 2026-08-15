@@ -1117,7 +1117,6 @@ export default function OrdersPage() {
                       onDelete={handleDelete}
                       onShowPartnerDetail={handleShowPartnerDetail}
                       onPrintSingleOrderInvoice={handlePrintSingleOrderInvoice}
-                      onUploadPhotos={handleUploadPhotos}
                     />
                   );
                 })}
@@ -1196,7 +1195,6 @@ export default function OrdersPage() {
                         onDelete={handleDelete}
                         onShowPartnerDetail={handleShowPartnerDetail}
                         onPrintSingleOrderInvoice={handlePrintSingleOrderInvoice}
-                        onUploadPhotos={handleUploadPhotos}
                       />
                     );
                   })}

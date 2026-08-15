@@ -172,16 +172,20 @@ export async function findOrCreateDriveFolderHierarchy(
     partnerName?: string;
     projectNo: string;
   }
-): Promise<{ rootFolderId: string | null; targetFolderId: string | null }> {
+): Promise<{ rootFolderId: string | null; targetFolderId: string | null; error?: string }> {
   // Step 1: Get Root Parent Folder (타스_도면 or shared/env folder)
   const root = await getRootParentFolder(drive);
   const rootId = root ? root.id : null;
 
   if (!rootId) {
-    return { rootFolderId: null, targetFolderId: null };
+    return { 
+      rootFolderId: null, 
+      targetFolderId: null, 
+      error: '기준 폴더(타스_도면)를 찾을 수 없거나 구글 드라이브 접근 권한이 없습니다. 서비스 계정에 폴더를 공유해 주셨는지 확인해 주세요.' 
+    };
   }
 
-  // Step 2: Find or create Partner Folder (e.g. '(주)타스')
+  // Step 2: Find or create Partner Folder (e.g. '아크인터내셔널') under Root Folder
   const cleanPartnerName = partnerName && partnerName.trim() ? partnerName.trim() : '일반거래처';
   const partnerFolderId = await findOrCreateDriveSubFolder(drive, cleanPartnerName, rootId);
 
@@ -195,6 +199,8 @@ export async function findOrCreateDriveFolderHierarchy(
   };
 }
 
+export const findOrCreateFolderPath = findOrCreateDriveFolderHierarchy;
+
 export async function uploadBufferToGoogleDrive({
   fileName,
   mimeType,
@@ -207,17 +213,24 @@ export async function uploadBufferToGoogleDrive({
   buffer: Buffer;
   projectNo: string;
   partnerName?: string;
-}): Promise<{ success: boolean; fileId?: string; webViewLink?: string; reason?: string }> {
+}): Promise<{ success: boolean; fileId?: string; webViewLink?: string; targetFolderId?: string; reason?: string }> {
   try {
     const drive = getGoogleDriveClient();
     if (!drive) {
       return {
         success: false,
-        reason: 'GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_PRIVATE_KEY is not configured in environment variables'
+        reason: 'GOOGLE_SERVICE_ACCOUNT_EMAIL 또는 GOOGLE_PRIVATE_KEY가 Vercel 환경변수에 설정되어 있지 않습니다.'
       };
     }
 
-    const { targetFolderId } = await findOrCreateDriveFolderHierarchy(drive, { partnerName, projectNo });
+    const { targetFolderId, error: hierarchyError } = await findOrCreateDriveFolderHierarchy(drive, { partnerName, projectNo });
+
+    if (!targetFolderId) {
+      return {
+        success: false,
+        reason: hierarchyError || '구글 드라이브 대상 폴더(타스_도면 > 거래처명 > 프로젝트번호) 생성 및 접근에 실패하였습니다.'
+      };
+    }
 
     const stream = new Readable();
     stream.push(buffer);
@@ -225,7 +238,7 @@ export async function uploadBufferToGoogleDrive({
 
     const fileMetadata: any = {
       name: fileName,
-      parents: targetFolderId ? [targetFolderId] : undefined
+      parents: [targetFolderId]
     };
 
     const media = {
@@ -244,13 +257,14 @@ export async function uploadBufferToGoogleDrive({
     return {
       success: true,
       fileId: fileRes.data.id || undefined,
-      webViewLink: fileRes.data.webViewLink || undefined
+      webViewLink: fileRes.data.webViewLink || undefined,
+      targetFolderId
     };
   } catch (err: any) {
     console.error('[GoogleDrive] Upload error:', err);
     return {
       success: false,
-      reason: err.message || 'Drive API upload failed'
+      reason: err.message || 'Drive API 파일 업로드 실패'
     };
   }
 }

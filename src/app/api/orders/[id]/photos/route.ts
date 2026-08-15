@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { uploadBufferToGoogleDrive } from '@/lib/googleDrive';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -100,31 +103,47 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           photoUrl = `data:${mimeType};base64,${base64}`;
         }
 
-        // 2. Trigger Google Drive Upload in Background (non-blocking)
+        // 2. Upload to Google Drive (타스_도면 > 거래처명 > PRJ-XXX)
         const driveFileName = `site-${projectNo}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}.${file.name.split('.').pop() || 'jpg'}`;
-        uploadBufferToGoogleDrive({
+        const driveResult = await uploadBufferToGoogleDrive({
           fileName: driveFileName,
           mimeType: file.type || 'image/jpeg',
           buffer,
           projectNo,
           partnerName: order.partnerName
-        }).catch(err => console.error('[Background Drive Upload Failed]:', err));
+        });
+
+        if (!driveResult.success) {
+          console.warn(`[GoogleDrive Upload Warning for ${file.name}]:`, driveResult.reason);
+        }
 
         // 3. Create BlogPhoto record for instant web gallery
-        return prisma.blogPhoto.create({
+        const photoRecord = await prisma.blogPhoto.create({
           data: {
             url: photoUrl,
             folderId: folder.id
           }
         });
+
+        return {
+          ...photoRecord,
+          driveResult
+        };
       })
     );
+
+    const firstDriveError = uploadedPhotos.find(p => p.driveResult && !p.driveResult.success)?.driveResult?.reason;
+    const allDriveSuccess = uploadedPhotos.every(p => p.driveResult && p.driveResult.success);
 
     return NextResponse.json({
       success: true,
       folderId: folder.id,
       folderName: folder.name,
-      photos: uploadedPhotos
+      photos: uploadedPhotos,
+      googleDriveStatus: {
+        success: allDriveSuccess,
+        reason: firstDriveError || (allDriveSuccess ? '구글 드라이브 폴더(타스_도면 > 거래처명 > 프로젝트번호) 원본 업로드 성공' : undefined)
+      }
     }, { status: 201 });
   } catch (error) {
     console.error('Site photo upload error:', error);

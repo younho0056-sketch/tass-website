@@ -455,16 +455,16 @@ export default function EstimatesPage() {
           </Button>
         </PageHeaderBanner>
 
-        {/* 상태 필터 탭 (4가지 단계 - 수치 통합) */}
+        {/* 상태 필터 탭 (견적중 ➔ 견적완료 ➔ 수주성공 ➔ 수주취소 ➔ 전체 보기) */}
         <SegmentedControl
           value={tabFilter}
           onChange={setTabFilter}
           data={[
-            { label: `전체 보기 (${metrics.totalCount}건)`, value: 'ALL' },
             { label: `견적중 (${metrics.inProgressCount}건)`, value: '견적중' },
             { label: `견적완료 (${metrics.completedCount}건)`, value: '견적완료' },
             { label: `수주성공 (${metrics.successCount}건)`, value: '수주성공' },
             { label: `수주취소 (${metrics.cancelledCount}건)`, value: '수주취소' },
+            { label: `전체 보기 (${metrics.totalCount}건)`, value: 'ALL' },
           ]}
           size="md"
           radius="md"

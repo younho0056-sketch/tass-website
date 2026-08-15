@@ -94,50 +94,41 @@ export default function AuthModal() {
           <div style={{
             backgroundColor: '#2563eb',
             color: '#ffffff',
-            padding: '4px 10px',
+            padding: '3px 8px',
             borderRadius: '6px',
             fontWeight: 900,
-            fontSize: '14px',
+            fontSize: '13px',
             letterSpacing: '1px'
           }}>
             TASS
           </div>
-          <Text fw={800} size="lg">시스템 접속 인증 (PIN)</Text>
+          <Text fw={800} size="md">시스템 접속 인증 (PIN)</Text>
         </Group>
       }
       centered
-      radius="lg"
+      radius="md"
       overlayProps={{
         backgroundOpacity: 0.75,
         blur: 6,
       }}
-      size="sm"
+      size={330}
+      styles={{
+        content: { maxWidth: '330px', width: '100%' }
+      }}
     >
       <form onSubmit={handleSubmit} autoComplete="off">
-        <Stack gap="md" pt="xs">
+        <Stack gap="sm" pt="xs">
           <Text size="xs" c="dimmed" ta="center" fw={600}>
-            TASS 시스템 접근을 위해 PIN 비밀번호 4자리를 입력해 주세요.
+            PIN 비밀번호 4자리를 입력해 주세요.
           </Text>
 
-          <Paper p="sm" radius="md" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-            <Text size="xs" fw={700} c="gray.7" mb={6}>💡 접속 권한 안내</Text>
-            <Group gap="xs" mb={4}>
-              <Badge color="teal" size="sm" variant="filled">직원 권한</Badge>
-              <Text size="xs" c="gray.6">조회, 검색, A4/송장 출력 가능</Text>
-            </Group>
-            <Group gap="xs">
-              <Badge color="blue" size="sm" variant="filled">관리자 권한</Badge>
-              <Text size="xs" c="gray.6">등록, 수정, 삭제, AI 전권 이용 가능</Text>
-            </Group>
-          </Paper>
-
           {error && (
-            <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light" radius="md">
-              {error}
+            <Alert icon={<IconAlertCircle size={15} />} color="red" variant="light" radius="md" p="xs">
+              <Text size="xs">{error}</Text>
             </Alert>
           )}
 
-          {/* Large Mobile Numeric Keypad Input with Security Masking & Device Submission Handling */}
+          {/* Numeric Keypad Input with Security Masking */}
           <div style={{ position: 'relative' }}>
             <input
               ref={inputRef}
@@ -159,17 +150,17 @@ export default function AuthModal() {
               className="text-2xl tracking-widest text-center"
               style={{
                 width: '100%',
-                height: '60px',
-                fontSize: '28px',
+                height: '52px',
+                fontSize: '24px',
                 fontWeight: 900,
-                letterSpacing: '12px',
+                letterSpacing: '10px',
                 textAlign: 'center',
-                borderRadius: '12px',
+                borderRadius: '10px',
                 border: error ? '2px solid #ef4444' : '2px solid #3b82f6',
                 backgroundColor: '#ffffff',
                 color: '#0f172a',
                 outline: 'none',
-                boxShadow: '0 4px 14px rgba(59, 130, 246, 0.18)',
+                boxShadow: '0 3px 10px rgba(59, 130, 246, 0.15)',
                 transition: 'all 0.2s ease-in-out'
               }}
             />
@@ -179,20 +170,20 @@ export default function AuthModal() {
               onClick={() => setShowPin(!showPin)}
               style={{
                 position: 'absolute',
-                right: '14px',
+                right: '10px',
                 top: '50%',
                 transform: 'translateY(-50%)'
               }}
             >
-              {showPin ? <IconEyeOff size={20} /> : <IconEye size={20} />}
+              {showPin ? <IconEyeOff size={18} /> : <IconEye size={18} />}
             </ActionIcon>
           </div>
 
           <Group justify="space-between" mt="xs">
-            <Button variant="subtle" color="gray" onClick={handleClose}>
+            <Button variant="subtle" color="gray" size="sm" onClick={handleClose}>
               취소
             </Button>
-            <Button type="submit" color="blue" size="md" radius="md" rightSection={<IconShieldCheck size={18} />}>
+            <Button type="submit" color="blue" size="sm" radius="md" rightSection={<IconShieldCheck size={16} />}>
               시스템 접속
             </Button>
           </Group>

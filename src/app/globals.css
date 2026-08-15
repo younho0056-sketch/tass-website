@@ -14,6 +14,14 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
+/* Edge/Chrome 브라우저 기본 패스워드 표시/지우기 아이콘 숨김 (커스텀 눈 아이콘 중복 방지) */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 /* Crisp Clean Panel Card Utility - Enterprise Dashboard Aesthetic */
 .glass-panel, .glass-card {
   background: #ffffff !important;

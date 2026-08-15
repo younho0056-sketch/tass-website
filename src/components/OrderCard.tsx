@@ -100,10 +100,9 @@ const OrderCard = memo(function OrderCard({
           </Group>
 
           <Text 
-            fw={500} 
+            fw={700} 
             size="sm"
-            c="blue.8"
-            style={{ cursor: 'pointer' }}
+            className="font-bold text-blue-600 hover:text-blue-700 cursor-pointer transition-colors"
             onClick={() => onShowPartnerDetail(order.partnerName, order)}
           >
             {order.partnerName}

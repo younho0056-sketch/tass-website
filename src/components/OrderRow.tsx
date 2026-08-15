@@ -95,9 +95,9 @@ export const OrderRow = memo(function OrderRow({
       <Table.Td>
         <Tooltip label="거래처 상세 정보 보기">
           <Text 
-            fw={500} 
-            c="blue.8"
-            style={{ cursor: 'pointer' }}
+            fw={700} 
+            size="sm"
+            className="font-bold text-blue-600 hover:text-blue-700 cursor-pointer transition-colors"
             onClick={() => onShowPartnerDetail(order.partnerName, order)}
           >
             {order.partnerName}

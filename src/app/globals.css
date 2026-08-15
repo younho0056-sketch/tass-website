@@ -227,7 +227,7 @@ body {
   }
 
   /* 공정 관리 현장 지시용 인쇄 표 양식 (A4 Landscape) */
-  .orders-print-page {
+  .orders-print-page, .work-order-print-page {
     width: 100% !important;
     max-width: 100% !important;
     height: auto !important;

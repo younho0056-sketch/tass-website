@@ -166,6 +166,11 @@ export default function OrdersPage() {
   const [printInvoicePartner, setPrintInvoicePartner] = useState<PartnerDetail | null>(null);
   const [printInvoiceOrder, setPrintInvoiceOrder] = useState<Order | null>(null);
 
+  // Work Order Modal & Print State
+  const [workOrderModalOpened, { open: openWorkOrderModal, close: closeWorkOrderModal }] = useDisclosure(false);
+  const [selectedWorkOrder, setSelectedWorkOrder] = useState<{ order: Order; stepName: string } | null>(null);
+  const [printWorkOrder, setPrintWorkOrder] = useState<{ order: Order; stepName: string } | null>(null);
+
   // Form State
   const [projectNo, setProjectNo] = useState('');
   const [drawingUrl, setDrawingUrl] = useState('');
@@ -563,12 +568,26 @@ export default function OrdersPage() {
       address: null,
       memo: null
     };
+    setPrintWorkOrder(null);
     setPrintInvoicePartner(partner);
     setPrintInvoiceOrder(order);
     setTimeout(() => {
       window.print();
     }, 150);
   }, [allPartners]);
+
+  const handleOpenWorkOrder = useCallback((order: Order, stepName: string) => {
+    setSelectedWorkOrder({ order, stepName });
+    openWorkOrderModal();
+  }, [openWorkOrderModal]);
+
+  const handlePrintWorkOrder = useCallback((order: Order, stepName: string) => {
+    setPrintInvoicePartner(null);
+    setPrintWorkOrder({ order, stepName });
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  }, []);
 
   const metrics = useMemo(() => {
     const totalCount = orders.length;
@@ -731,6 +750,7 @@ export default function OrdersPage() {
             size="sm"
             leftSection={<IconPrinter size={16} />}
             onClick={() => {
+              setPrintWorkOrder(null);
               setPrintInvoicePartner(null);
               window.print();
             }}
@@ -940,6 +960,7 @@ export default function OrdersPage() {
                 size="sm"
                 leftSection={<IconPrinter size={16} />}
                 onClick={() => {
+                  setPrintWorkOrder(null);
                   setPrintInvoicePartner(null);
                   window.print();
                 }}
@@ -1207,6 +1228,7 @@ export default function OrdersPage() {
                         onShowPartnerDetail={handleShowPartnerDetail}
                         onPrintSingleOrderInvoice={handlePrintSingleOrderInvoice}
                         onUploadPhotos={handleUploadPhotos}
+                        onOpenWorkOrder={handleOpenWorkOrder}
                       />
                     );
                   })}
@@ -1448,11 +1470,269 @@ export default function OrdersPage() {
             </Card>
           )}
         </Modal>
+
+        {/* 공정별 맞춤 작업지시서 팝업 모달 */}
+        <Modal
+          opened={mounted && workOrderModalOpened}
+          onClose={closeWorkOrderModal}
+          title={`[작업지시서] ${selectedWorkOrder?.order.projectNo || `PRJ-${String(selectedWorkOrder?.order.id || 0).padStart(3, '0')}`} - ${selectedWorkOrder?.stepName || ''} 공정`}
+          size="lg"
+          zIndex={300}
+          withinPortal={true}
+        >
+          {selectedWorkOrder && (() => {
+            const { order, stepName } = selectedWorkOrder;
+            const pNo = order.projectNo || `PRJ-${String(order.id).padStart(3, '0')}`;
+            const stepObj = order.steps?.find(s => s.name === stepName);
+            const stepStatus = stepObj?.status || '대기';
+            const stepDate = stepObj?.date || null;
+            const drawingTargetUrl = order.drawingUrl && order.drawingUrl.trim()
+              ? order.drawingUrl.trim()
+              : `https://drive.google.com/drive/u/0/search?q=${encodeURIComponent(pNo)}`;
+
+            return (
+              <Stack gap="md">
+                {/* 상단 안내 & 단독 인쇄 버튼 */}
+                <Paper p="md" radius="md" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                  <Group justify="space-between" align="center">
+                    <div>
+                      <Group gap="xs" mb={4}>
+                        <Badge color={stepStatus === '완료' ? 'green' : stepStatus === '진행중' ? 'blue' : 'gray'} size="lg">
+                          {stepName} ({stepStatus})
+                        </Badge>
+                        {stepDate && <Badge variant="outline" color="dark" size="sm">처리일: {stepDate}</Badge>}
+                      </Group>
+                      <Text size="xs" c="blue.9" fw={700}>
+                        프로젝트: {pNo} | {order.partnerName}
+                      </Text>
+                    </div>
+                    <Button
+                      color="blue.6"
+                      variant="filled"
+                      size="sm"
+                      leftSection={<IconPrinter size={16} />}
+                      onClick={() => handlePrintWorkOrder(order, stepName)}
+                    >
+                      🖨️ 해당 공정 작업지시서 인쇄
+                    </Button>
+                  </Group>
+                </Paper>
+
+                {/* 핵심 수주 정보 그리드 */}
+                <Card padding="md" radius="md" style={{ border: '1px solid #e2e8f0' }}>
+                  <SimpleGrid cols={2} spacing="md">
+                    <div>
+                      <Text size="xs" c="dimmed" fw={700}>프로젝트 번호 (PRJ No.)</Text>
+                      <Text fw={800} size="md" c="dark">{pNo}</Text>
+                    </div>
+                    <div>
+                      <Text size="xs" c="dimmed" fw={700}>거래처명</Text>
+                      <Text fw={800} size="md" c="blue.7">{order.partnerName}</Text>
+                    </div>
+                    <div>
+                      <Text size="xs" c="dimmed" fw={700}>품목명 / 수량</Text>
+                      <Text fw={700} size="sm">{order.itemName} ({order.quantity}개)</Text>
+                    </div>
+                    <div>
+                      <Text size="xs" c="dimmed" fw={700}>발주일 ➔ 공정 납기일</Text>
+                      <Text fw={700} size="sm" c="red.7">{order.orderDate || '-'} ~ {order.dueDate || '-'}</Text>
+                    </div>
+                  </SimpleGrid>
+                </Card>
+
+                {/* 도면 드라이브 바로가기 */}
+                <Paper p="sm" radius="md" style={{ border: '1px solid #cbd5e1', backgroundColor: '#f8fafc' }}>
+                  <Group justify="space-between" align="center">
+                    <div>
+                      <Text size="xs" fw={700} c="dimmed">📐 도면 및 작업 소스 드라이브</Text>
+                      <Text size="xs" fw={600} truncate="end" style={{ maxWidth: '350px' }}>
+                        {order.drawingUrl && order.drawingUrl.trim() ? order.drawingUrl.trim() : `구글 드라이브 [${pNo}] 도면 자동 검색`}
+                      </Text>
+                    </div>
+                    <Button
+                      component="a"
+                      href={drawingTargetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      size="xs"
+                      color="teal"
+                      variant="light"
+                      leftSection={<IconFolderOpen size={14} />}
+                    >
+                      도면 드라이브 열기
+                    </Button>
+                  </Group>
+                </Paper>
+
+                {/* 관리자 지시 메모 */}
+                <Card padding="md" radius="md" style={{ border: '1px solid #cbd5e1' }}>
+                  <Text size="xs" c="dimmed" fw={700} mb={4}>📋 관리자 지시 메모 & 공정 특이사항</Text>
+                  <Text size="sm" style={{ whiteSpace: 'pre-wrap', minHeight: '40px', lineHeight: 1.5 }}>
+                    {order.memo && order.memo.trim() ? order.memo : '특별 지시 사항 없음. 도면 치수 및 안전 지침에 따라 공정을 진행하세요.'}
+                  </Text>
+                </Card>
+
+                {/* 현장 안전 및 품질 점검 안내 */}
+                <Paper p="sm" radius="md" style={{ backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1' }}>
+                  <Text size="xs" fw={700} c="gray.8" mb={4}>✅ 현장 표준 검수 및 작업안전 체크리스트 (인쇄물 반영)</Text>
+                  <Stack gap={2}>
+                    <Text size="xs" c="gray.7">1. 작업 전 개인 보호구 착용 및 불티 방지포 설치 (안전수칙 준수)</Text>
+                    <Text size="xs" c="gray.7">2. 도면 치수 및 외관 사양 실측 검사 (도면 허용오차 규격)</Text>
+                    <Text size="xs" c="gray.7">3. {stepName} 공정 가공/용접 품질 검사 및 완료 후 서명 작성</Text>
+                  </Stack>
+                </Paper>
+              </Stack>
+            );
+          })()}
+        </Modal>
       </Stack>
 
-      {/* PRINT VIEW: A4 인쇄 표 양식 (공정표 or 거래처 송장) */}
+      {/* PRINT VIEW: A4 인쇄 표 양식 (공정별 작업지시서 or 공정표 or 거래처 송장) */}
       <div className="hidden print:block">
-        {printInvoicePartner ? (
+        {printWorkOrder ? (
+          <div className="work-order-print-page">
+            {/* 공정별 작업지시서 A4 단독 1장 인쇄 양식 */}
+            <div style={{ borderBottom: '3px double #000', paddingBottom: '3mm', marginBottom: '4mm', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              <div>
+                <h1 style={{ fontSize: '18pt', fontWeight: 900, margin: 0, letterSpacing: '2px' }}>
+                  TASS 공정별 작업지시서 ({printWorkOrder.stepName} 공정)
+                </h1>
+                <div style={{ fontSize: '9pt', color: '#333', marginTop: '1mm' }}>
+                  Technology About Safety Systems | 생산 현장 관리 전용
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', border: '1px solid #000', padding: '2mm 3mm', fontSize: '8.5pt', lineHeight: 1.3 }}>
+                <div><strong>발행일자:</strong> {todayStr}</div>
+                <div><strong>지시서 번호:</strong> WO-{(printWorkOrder.order.projectNo || `PRJ-${String(printWorkOrder.order.id).padStart(3, '0')}`)}-{printWorkOrder.stepName}</div>
+              </div>
+            </div>
+
+            {/* 수주 핵심 정보 표 */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4mm', fontSize: '9.5pt' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '16%', backgroundColor: '#f1f5f9', fontWeight: 'bold', border: '1px solid #000', padding: '2.5mm' }}>프로젝트 번호</td>
+                  <td style={{ width: '34%', border: '1px solid #000', padding: '2.5mm', fontWeight: 'bold', fontSize: '10.5pt' }}>
+                    {printWorkOrder.order.projectNo || `PRJ-${String(printWorkOrder.order.id).padStart(3, '0')}`}
+                  </td>
+                  <td style={{ width: '16%', backgroundColor: '#f1f5f9', fontWeight: 'bold', border: '1px solid #000', padding: '2.5mm' }}>거래처명</td>
+                  <td style={{ width: '34%', border: '1px solid #000', padding: '2.5mm', fontWeight: 'bold', fontSize: '10.5pt' }}>
+                    {printWorkOrder.order.partnerName}
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ backgroundColor: '#f1f5f9', fontWeight: 'bold', border: '1px solid #000', padding: '2.5mm' }}>품목명 / 수량</td>
+                  <td style={{ border: '1px solid #000', padding: '2.5mm', fontWeight: 'bold' }}>
+                    {printWorkOrder.order.itemName} ({printWorkOrder.order.quantity}개)
+                  </td>
+                  <td style={{ backgroundColor: '#f1f5f9', fontWeight: 'bold', border: '1px solid #000', padding: '2.5mm' }}>지시 공정 단계</td>
+                  <td style={{ border: '1px solid #000', padding: '2.5mm', fontWeight: 'bold', color: '#1d4ed8' }}>
+                    {printWorkOrder.stepName} ({printWorkOrder.order.steps?.find(s => s.name === printWorkOrder.stepName)?.status || '대기'})
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ backgroundColor: '#f1f5f9', fontWeight: 'bold', border: '1px solid #000', padding: '2.5mm' }}>수주 발주일</td>
+                  <td style={{ border: '1px solid #000', padding: '2.5mm' }}>{printWorkOrder.order.orderDate || '-'}</td>
+                  <td style={{ backgroundColor: '#f1f5f9', fontWeight: 'bold', border: '1px solid #000', padding: '2.5mm' }}>최종 납기일</td>
+                  <td style={{ border: '1px solid #000', padding: '2.5mm', fontWeight: 'bold', color: '#dc2626' }}>
+                    {printWorkOrder.order.dueDate || '-'}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* 도면 드라이브 경로 안내 */}
+            <div style={{ border: '1px solid #000', padding: '2.5mm 3.5mm', marginBottom: '4mm', backgroundColor: '#f8fafc', fontSize: '9pt' }}>
+              <strong>📐 도면 드라이브 링크:</strong>{' '}
+              {printWorkOrder.order.drawingUrl && printWorkOrder.order.drawingUrl.trim()
+                ? printWorkOrder.order.drawingUrl.trim()
+                : `구글 드라이브 TASS 공유 저장소 [${printWorkOrder.order.projectNo || `PRJ-${String(printWorkOrder.order.id).padStart(3, '0')}`}] 검색`}
+            </div>
+
+            {/* 관리자 메모 박스 */}
+            <div style={{ border: '1px solid #000', padding: '3.5mm', marginBottom: '4mm', minHeight: '30mm' }}>
+              <div style={{ fontWeight: 'bold', fontSize: '10.5pt', borderBottom: '1px solid #000', paddingBottom: '1.5mm', marginBottom: '2mm' }}>
+                📋 관리자 지시 사항 및 메모
+              </div>
+              <div style={{ fontSize: '9.5pt', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                {printWorkOrder.order.memo && printWorkOrder.order.memo.trim()
+                  ? printWorkOrder.order.memo
+                  : '특별 지시 사항 없음. 도면 규격 및 안전 관리 표준 프로세스에 준하여 제작을 진행해 주세요.'}
+              </div>
+            </div>
+
+            {/* 품질 & 안전 점검 표 */}
+            <div style={{ marginBottom: '4mm' }}>
+              <div style={{ fontWeight: 'bold', fontSize: '10pt', marginBottom: '1.5mm' }}>
+                ✅ {printWorkOrder.stepName} 공정 품질 및 안전 점검 항목
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f1f5f9' }}>
+                    <th style={{ border: '1px solid #000', padding: '1.5mm', width: '8%', textAlign: 'center' }}>No.</th>
+                    <th style={{ border: '1px solid #000', padding: '1.5mm', width: '52%', textAlign: 'left' }}>점검 항목</th>
+                    <th style={{ border: '1px solid #000', padding: '1.5mm', width: '20%', textAlign: 'center' }}>기준 / 규격</th>
+                    <th style={{ border: '1px solid #000', padding: '1.5mm', width: '20%', textAlign: 'center' }}>검사 결과</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>1</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm' }}>작업 전 개인 보호구 착용 및 주변 안전 환경 상태</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>안전수칙 준수</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>[ &nbsp; ] 양호 / [ &nbsp; ] 불량</td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>2</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm' }}>도면 치수 및 형상 사양 일치 여부 실측 점검</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>도면 허용오차 내</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>[ &nbsp; ] 양호 / [ &nbsp; ] 불량</td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>3</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm' }}>{printWorkOrder.stepName} 공정 마감 상태 및 외관 품질 검사</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>외관 육안검사</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>[ &nbsp; ] 양호 / [ &nbsp; ] 불량</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* 작업자 / 검수자 서명 및 타임시트 */}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginTop: '3mm' }}>
+              <tbody>
+                <tr>
+                  <td style={{ width: '25%', border: '1px solid #000', padding: '2.5mm', textAlign: 'center', backgroundColor: '#f1f5f9', fontWeight: 'bold' }}>
+                    작업 착수 시각
+                  </td>
+                  <td style={{ width: '25%', border: '1px solid #000', padding: '2.5mm', textAlign: 'center' }}>
+                    월 &nbsp;&nbsp;&nbsp; 일 &nbsp;&nbsp;&nbsp; 시 &nbsp;&nbsp;&nbsp; 분
+                  </td>
+                  <td style={{ width: '25%', border: '1px solid #000', padding: '2.5mm', textAlign: 'center', backgroundColor: '#f1f5f9', fontWeight: 'bold' }}>
+                    작업자 서명
+                  </td>
+                  <td style={{ width: '25%', border: '1px solid #000', padding: '2.5mm', textAlign: 'center' }}>
+                    (인)
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ border: '1px solid #000', padding: '2.5mm', textAlign: 'center', backgroundColor: '#f1f5f9', fontWeight: 'bold' }}>
+                    작업 완료 시각
+                  </td>
+                  <td style={{ border: '1px solid #000', padding: '2.5mm', textAlign: 'center' }}>
+                    월 &nbsp;&nbsp;&nbsp; 일 &nbsp;&nbsp;&nbsp; 시 &nbsp;&nbsp;&nbsp; 분
+                  </td>
+                  <td style={{ border: '1px solid #000', padding: '2.5mm', textAlign: 'center', backgroundColor: '#f1f5f9', fontWeight: 'bold' }}>
+                    검수자 서명
+                  </td>
+                  <td style={{ border: '1px solid #000', padding: '2.5mm', textAlign: 'center' }}>
+                    (인)
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ) : printInvoicePartner ? (
           <div className="print-container">
             <div className="shipping-label-box" style={{ width: '170mm', margin: 'auto', border: '2px solid #000', padding: '8mm', backgroundColor: '#fff' }}>
               <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '4mm', marginBottom: '4mm' }}>

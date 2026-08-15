@@ -15,6 +15,7 @@ interface OrderCardProps {
   onShowPartnerDetail: (partnerName: string, order?: Order) => void;
   onPrintSingleOrderInvoice: (order: Order) => void;
   onUploadPhotos?: (order: Order, files: File[]) => void;
+  onOpenWorkOrder?: (order: Order, stepName: string) => void;
 }
 
 const OrderCard = memo(function OrderCard({
@@ -26,7 +27,8 @@ const OrderCard = memo(function OrderCard({
   onDelete,
   onShowPartnerDetail,
   onPrintSingleOrderInvoice,
-  onUploadPhotos
+  onUploadPhotos,
+  onOpenWorkOrder
 }: OrderCardProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const displayProjectNo = order.projectNo || `PRJ-${String(order.id).padStart(3, '0')}`;
@@ -139,33 +141,87 @@ const OrderCard = memo(function OrderCard({
           </Text>
         </Group>
 
-        {/* Process Step Badges */}
+        {/* Process Step Badges (Fixed 82px width with split click triggers) */}
         <Group gap={5} wrap="wrap" mt={4}>
           {(order.steps || []).filter(s => s.active).map(s => (
-            <Stack key={s.name} gap={1} align="center" style={{ display: 'inline-flex' }}>
-              <Badge
-                size="sm"
-                radius="sm"
-                variant={s.status === '완료' ? 'light' : s.status === '진행중' ? 'filled' : 'outline'}
-                color={s.status === '완료' ? 'dark' : s.status === '진행중' ? 'blue' : 'gray.4'}
-                onClick={() => onToggleStep(order, s.name)}
-                style={{ 
-                  cursor: 'pointer', 
-                  userSelect: 'none', 
-                  textTransform: 'none', 
-                  fontWeight: 600,
-                  paddingLeft: '6px',
-                  paddingRight: '6px',
-                  height: '22px'
+            <Stack key={s.name} gap={1} align="center" style={{ display: 'inline-flex', width: '82px' }}>
+              <div
+                style={{
+                  width: '82px',
+                  minWidth: '82px',
+                  maxWidth: '82px',
+                  height: '22px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderRadius: '4px',
+                  border: `1px solid ${s.status === '완료' ? '#0f172a' : s.status === '진행중' ? '#1d4ed8' : '#cbd5e1'}`,
+                  backgroundColor: s.status === '완료' ? '#1e293b' : s.status === '진행중' ? '#2563eb' : '#ffffff',
+                  color: s.status === '대기' ? '#334155' : '#ffffff',
+                  userSelect: 'none',
+                  overflow: 'hidden',
+                  boxSizing: 'border-box'
                 }}
               >
-                {s.status === '완료' ? `✓ ${s.name}` : s.status === '진행중' ? `▶ ${s.name}` : s.name}
-              </Badge>
-              {s.date && (
-                <Text size="10px" c="dimmed" fw={600}>
-                  {s.date}
-                </Text>
-              )}
+                {/* Left Icon Area: Opens Work Order Modal */}
+                <Tooltip label={`[${s.name}] 작업지시서 열람 및 A4 인쇄`}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenWorkOrder?.(order, s.name);
+                    }}
+                    style={{
+                      width: '22px',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: 'none',
+                      borderRight: `1px solid ${s.status === '대기' ? '#cbd5e1' : 'rgba(255, 255, 255, 0.25)'}`,
+                      backgroundColor: 'transparent',
+                      color: 'inherit',
+                      cursor: 'pointer',
+                      padding: 0,
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      flexShrink: 0
+                    }}
+                  >
+                    {s.status === '완료' ? '✓' : s.status === '진행중' ? '▶' : '📋'}
+                  </button>
+                </Tooltip>
+
+                {/* Right Text Area: Toggles Step Status */}
+                <Tooltip label={`[${s.name}] 클릭 시 공정 상태 변경 (대기 ➔ 진행중 ➔ 완료)`}>
+                  <button
+                    type="button"
+                    onClick={() => onToggleStep(order, s.name)}
+                    style={{
+                      flex: 1,
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: 'none',
+                      backgroundColor: 'transparent',
+                      color: 'inherit',
+                      cursor: 'pointer',
+                      padding: '0 2px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      lineHeight: 1
+                    }}
+                  >
+                    {s.status === '완료' ? (s.name.length > 3 ? s.name : `${s.name} 완료`) : s.status === '진행중' ? (s.name.length > 3 ? s.name : `${s.name} 진행`) : s.name}
+                  </button>
+                </Tooltip>
+              </div>
+              <Text size="11px" c="dimmed" fw={600} ta="center" style={{ width: '82px', minHeight: '14px', lineHeight: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                {s.date || ''}
+              </Text>
             </Stack>
           ))}
         </Group>

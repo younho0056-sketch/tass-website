@@ -180,6 +180,8 @@ export async function findOrCreateDriveFolderHierarchy(
   const root = await getRootParentFolder(drive);
   const rootId = root ? root.id : null;
 
+  console.log('[GoogleDrive] Root Folder resolved:', rootId, 'via method:', root?.method || 'none');
+
   if (!rootId) {
     return { 
       rootFolderId: null, 
@@ -196,9 +198,12 @@ export async function findOrCreateDriveFolderHierarchy(
   const parentForProject = partnerFolderId || rootId;
   const projectFolderId = await findOrCreateDriveSubFolder(drive, projectNo, parentForProject);
 
+  const finalTargetFolderId = projectFolderId || partnerFolderId || rootId;
+  console.log('[GoogleDrive] Target Folder ID resolved:', finalTargetFolderId);
+
   return {
     rootFolderId: rootId,
-    targetFolderId: projectFolderId || partnerFolderId || rootId
+    targetFolderId: finalTargetFolderId
   };
 }
 
@@ -220,19 +225,19 @@ export async function uploadBufferToGoogleDrive({
   try {
     const drive = getGoogleDriveClient();
     if (!drive) {
-      return {
-        success: false,
-        reason: 'GOOGLE_SERVICE_ACCOUNT_EMAIL 또는 GOOGLE_PRIVATE_KEY가 Vercel 환경변수에 설정되어 있지 않습니다.'
-      };
+      const errorMsg = '[GoogleDrive Error] GOOGLE_SERVICE_ACCOUNT_EMAIL 또는 GOOGLE_PRIVATE_KEY가 Vercel 환경변수에 설정되어 있지 않습니다.';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
 
     const { targetFolderId, error: hierarchyError } = await findOrCreateDriveFolderHierarchy(drive, { partnerName, projectNo });
 
+    console.log('[GoogleDrive] Target Folder ID resolved:', targetFolderId);
+
     if (!targetFolderId || typeof targetFolderId !== 'string' || !targetFolderId.trim()) {
-      return {
-        success: false,
-        reason: hierarchyError || '구글 드라이브 대상 공유 폴더 ID(targetFolderId)가 결정되지 않았습니다. (Service Account는 개인 저장 공간이 없으므로 공유 폴더 parents 지정이 필수입니다.)'
-      };
+      const errorMsg = `[GoogleDrive Error] targetFolderId가 유효하지 않습니다. (${hierarchyError || 'Service Account는 개인 저장 용량이 없으므로 공유 폴더 parents 지정이 필수입니다.'})`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
 
     const cleanTargetFolderId = targetFolderId.trim();
@@ -241,10 +246,10 @@ export async function uploadBufferToGoogleDrive({
     stream.push(buffer);
     stream.push(null);
 
-    // CRITICAL: parents MUST be a non-empty array [cleanTargetFolderId]
+    // Explicitly construct createParams with parents: [cleanTargetFolderId] (string[])
     const fileMetadata = {
       name: fileName,
-      parents: [cleanTargetFolderId]
+      parents: [cleanTargetFolderId] // 반드시 targetFolderId가 들어있는 string[] 배열이어야 함
     };
 
     const media = {
@@ -255,10 +260,12 @@ export async function uploadBufferToGoogleDrive({
     const fileRes = await drive.files.create({
       requestBody: fileMetadata,
       media: media,
-      fields: 'id, webViewLink, webContentLink',
+      fields: 'id, name, webViewLink, webContentLink',
       supportsAllDrives: true,
       supportsTeamDrives: true
     });
+
+    console.log(`[GoogleDrive] File uploaded successfully. File ID: ${fileRes.data.id}, Target Folder: ${cleanTargetFolderId}`);
 
     return {
       success: true,

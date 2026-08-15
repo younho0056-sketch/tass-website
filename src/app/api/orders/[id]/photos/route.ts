@@ -105,16 +105,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
         // 2. Upload to Google Drive (타스_도면 > 거래처명 > PRJ-XXX)
         const driveFileName = `site-${projectNo}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}.${file.name.split('.').pop() || 'jpg'}`;
-        const driveResult = await uploadBufferToGoogleDrive({
-          fileName: driveFileName,
-          mimeType: file.type || 'image/jpeg',
-          buffer,
-          projectNo,
-          partnerName: order.partnerName
-        });
+        let driveResult: { success: boolean; fileId?: string; webViewLink?: string; targetFolderId?: string; reason?: string } = {
+          success: false
+        };
 
-        if (!driveResult.success) {
-          console.warn(`[GoogleDrive Upload Warning for ${file.name}]:`, driveResult.reason);
+        try {
+          driveResult = await uploadBufferToGoogleDrive({
+            fileName: driveFileName,
+            mimeType: file.type || 'image/jpeg',
+            buffer,
+            projectNo,
+            partnerName: order.partnerName
+          });
+
+          if (!driveResult.success) {
+            console.warn(`[GoogleDrive Upload Warning for ${file.name}]:`, driveResult.reason);
+          } else {
+            console.log(`[GoogleDrive Upload Success for ${file.name}]: targetFolderId=${driveResult.targetFolderId}, fileId=${driveResult.fileId}`);
+          }
+        } catch (driveErr: any) {
+          console.error(`[GoogleDrive Upload Exception for ${file.name}]:`, driveErr);
+          driveResult = {
+            success: false,
+            reason: driveErr.message || 'Google Drive API upload exception'
+          };
         }
 
         // 3. Create BlogPhoto record for instant web gallery
@@ -142,6 +156,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       photos: uploadedPhotos,
       googleDriveStatus: {
         success: allDriveSuccess,
+        targetFolderId: uploadedPhotos[0]?.driveResult?.targetFolderId || null,
         reason: firstDriveError || (allDriveSuccess ? '구글 드라이브 폴더(타스_도면 > 거래처명 > 프로젝트번호) 원본 업로드 성공' : undefined)
       }
     }, { status: 201 });

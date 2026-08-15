@@ -7,15 +7,23 @@ const SCOPES = [
 ];
 
 export function getGoogleDriveClient() {
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
   let privateKey = process.env.GOOGLE_PRIVATE_KEY;
 
   if (!clientEmail || !privateKey) {
     return null;
   }
 
-  // Handle line breaks in private key string
-  privateKey = privateKey.replace(/\\n/g, '\n');
+  // Robustly handle surrounding quotes, escaped newlines, and whitespace
+  privateKey = privateKey
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/\\n/g, '\n');
+
+  if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+    console.error('[GoogleDrive] Invalid privateKey format: missing BEGIN PRIVATE KEY header');
+    return null;
+  }
 
   const auth = new google.auth.JWT({
     email: clientEmail,

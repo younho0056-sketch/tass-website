@@ -13,7 +13,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { 
   IconPlus, IconSearch, 
   IconPhone, IconMail, IconPrinter, IconDownload,
-  IconChevronLeft, IconChevronRight, IconFolderOpen
+  IconChevronLeft, IconChevronRight, IconFolderOpen, IconPencil
 } from '@tabler/icons-react';
 import * as XLSX from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
@@ -170,6 +170,13 @@ export default function OrdersPage() {
   const [workOrderModalOpened, { open: openWorkOrderModal, close: closeWorkOrderModal }] = useDisclosure(false);
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<{ order: Order; stepName: string } | null>(null);
   const [printWorkOrder, setPrintWorkOrder] = useState<{ order: Order; stepName: string } | null>(null);
+
+  // Work Order Inline Edit State
+  const [isEditingCommonMemo, setIsEditingCommonMemo] = useState(false);
+  const [commonMemoDraft, setCommonMemoDraft] = useState('');
+  const [isEditingStepMemo, setIsEditingStepMemo] = useState(false);
+  const [stepMemoDraft, setStepMemoDraft] = useState('');
+  const [isSavingMemo, setIsSavingMemo] = useState(false);
 
   // Form State
   const [projectNo, setProjectNo] = useState('');
@@ -576,8 +583,91 @@ export default function OrdersPage() {
     }, 150);
   }, [allPartners]);
 
+  const handleSaveCommonMemo = useCallback(async () => {
+    if (!selectedWorkOrder) return;
+    const { order } = selectedWorkOrder;
+    setIsSavingMemo(true);
+
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memo: commonMemoDraft })
+      });
+
+      if (!res.ok) throw new Error('Failed to update memo');
+
+      const updatedOrder = { ...order, memo: commonMemoDraft };
+      setSelectedWorkOrder(prev => prev ? { ...prev, order: updatedOrder } : null);
+      setOrders(prev => prev.map(o => o.id === order.id ? updatedOrder : o));
+      if (mutateOrders) mutateOrders();
+
+      setIsEditingCommonMemo(false);
+      notifications.show({
+        title: '저장 완료',
+        message: '공통 작업지시사항 및 메모가 DB에 성공적으로 저장되었습니다.',
+        color: 'teal'
+      });
+    } catch (e) {
+      console.error(e);
+      notifications.show({
+        title: '저장 실패',
+        message: '공통 작업지시사항 저장 중 오류가 발생했습니다.',
+        color: 'red'
+      });
+    } finally {
+      setIsSavingMemo(false);
+    }
+  }, [selectedWorkOrder, commonMemoDraft, mutateOrders]);
+
+  const handleSaveStepMemo = useCallback(async () => {
+    if (!selectedWorkOrder) return;
+    const { order, stepName } = selectedWorkOrder;
+    setIsSavingMemo(true);
+
+    const updatedSteps = (order.steps || []).map(s => {
+      if (s.name === stepName) {
+        return { ...s, memo: stepMemoDraft };
+      }
+      return s;
+    });
+
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ processSteps: updatedSteps })
+      });
+
+      if (!res.ok) throw new Error('Failed to update step memo');
+
+      const updatedOrder = { ...order, steps: updatedSteps };
+      setSelectedWorkOrder(prev => prev ? { ...prev, order: updatedOrder } : null);
+      setOrders(prev => prev.map(o => o.id === order.id ? updatedOrder : o));
+      if (mutateOrders) mutateOrders();
+
+      setIsEditingStepMemo(false);
+      notifications.show({
+        title: '저장 완료',
+        message: `[${stepName}] 공정 작업지시사항 및 메모가 DB에 성공적으로 저장되었습니다.`,
+        color: 'teal'
+      });
+    } catch (e) {
+      console.error(e);
+      notifications.show({
+        title: '저장 실패',
+        message: `[${stepName}] 공정 지시사항 저장 중 오류가 발생했습니다.`,
+        color: 'red'
+      });
+    } finally {
+      setIsSavingMemo(false);
+    }
+  }, [selectedWorkOrder, stepMemoDraft, mutateOrders]);
+
   const handleOpenWorkOrder = useCallback((order: Order, stepName: string) => {
     setSelectedWorkOrder({ order, stepName });
+    setIsEditingCommonMemo(false);
+    setIsEditingStepMemo(false);
     openWorkOrderModal();
   }, [openWorkOrderModal]);
 
@@ -1564,21 +1654,119 @@ export default function OrdersPage() {
                   </Group>
                 </Paper>
 
-                {/* 관리자 지시 메모 */}
+                {/* 공통 작업지시사항 및 메모 */}
                 <Card padding="md" radius="md" style={{ border: '1px solid #cbd5e1' }}>
-                  <Text size="xs" c="dimmed" fw={700} mb={4}>📋 관리자 지시 메모 & 공정 특이사항</Text>
-                  <Text size="sm" style={{ whiteSpace: 'pre-wrap', minHeight: '40px', lineHeight: 1.5 }}>
-                    {order.memo && order.memo.trim() ? order.memo : '특별 지시 사항 없음. 도면 치수 및 안전 지침에 따라 공정을 진행하세요.'}
-                  </Text>
+                  <Group justify="space-between" align="center" mb={6}>
+                    <Text size="xs" c="dimmed" fw={700}>📋 공통 작업지시사항 및 메모</Text>
+                    {canEdit && !isEditingCommonMemo && (
+                      <Button
+                        size="xs"
+                        variant="light"
+                        color="blue"
+                        leftSection={<IconPencil size={12} />}
+                        onClick={() => {
+                          setCommonMemoDraft(order.memo || '');
+                          setIsEditingCommonMemo(true);
+                        }}
+                      >
+                        ✏️ 수정
+                      </Button>
+                    )}
+                  </Group>
+
+                  {isEditingCommonMemo ? (
+                    <Stack gap="xs">
+                      <Textarea
+                        value={commonMemoDraft}
+                        onChange={(e) => setCommonMemoDraft(e.target.value)}
+                        placeholder="공통 작업지시사항 및 메모 입력"
+                        minRows={3}
+                        autosize
+                      />
+                      <Group justify="flex-end" gap="xs">
+                        <Button size="xs" variant="subtle" color="gray" onClick={() => setIsEditingCommonMemo(false)} disabled={isSavingMemo}>
+                          취소
+                        </Button>
+                        <Button size="xs" color="blue" onClick={handleSaveCommonMemo} loading={isSavingMemo}>
+                          저장
+                        </Button>
+                      </Group>
+                    </Stack>
+                  ) : (
+                    <Text
+                      size="sm"
+                      className={order.memo && order.memo.trim() ? "text-red-600 font-semibold print-color-exact" : undefined}
+                      style={{
+                        whiteSpace: 'pre-wrap',
+                        minHeight: '40px',
+                        lineHeight: 1.5,
+                        color: order.memo && order.memo.trim() ? '#dc2626' : undefined,
+                        fontWeight: order.memo && order.memo.trim() ? 700 : 400
+                      }}
+                    >
+                      {order.memo && order.memo.trim() ? order.memo : '특별 지시 사항 없음. 도면 치수 및 안전 지침에 따라 공정을 진행하세요.'}
+                    </Text>
+                  )}
                 </Card>
 
-                {/* 현장 안전 및 품질 점검 안내 */}
+                {/* [공정명] 작업지시사항 및 메모 */}
                 <Paper p="sm" radius="md" style={{ backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1' }}>
-                  <Text size="xs" fw={700} c="gray.8" mb={4}>✅ 현장 표준 검수 및 작업안전 체크리스트 (인쇄물 반영)</Text>
+                  <Group justify="space-between" align="center" mb={6}>
+                    <Text size="xs" fw={700} c="gray.8">
+                      ✅ [{stepName}] 작업지시사항 및 메모
+                    </Text>
+                    {canEdit && !isEditingStepMemo && (
+                      <Button
+                        size="xs"
+                        variant="light"
+                        color="blue"
+                        leftSection={<IconPencil size={12} />}
+                        onClick={() => {
+                          setStepMemoDraft(stepObj?.memo || '');
+                          setIsEditingStepMemo(true);
+                        }}
+                      >
+                        ✏️ 수정
+                      </Button>
+                    )}
+                  </Group>
+
+                  {isEditingStepMemo ? (
+                    <Stack gap="xs" mb="sm">
+                      <Textarea
+                        value={stepMemoDraft}
+                        onChange={(e) => setStepMemoDraft(e.target.value)}
+                        placeholder={`[${stepName}] 공정 특기 지시사항 및 메모 입력`}
+                        minRows={3}
+                        autosize
+                      />
+                      <Group justify="flex-end" gap="xs">
+                        <Button size="xs" variant="subtle" color="gray" onClick={() => setIsEditingStepMemo(false)} disabled={isSavingMemo}>
+                          취소
+                        </Button>
+                        <Button size="xs" color="blue" onClick={handleSaveStepMemo} loading={isSavingMemo}>
+                          저장
+                        </Button>
+                      </Group>
+                    </Stack>
+                  ) : stepObj?.memo && stepObj.memo.trim() ? (
+                    <Paper p="xs" radius="sm" mb="sm" style={{ backgroundColor: '#fef2f2', border: '1px solid #fca5a5' }}>
+                      <Text size="xs" fw={700} c="red.8" mb={2}>⚠️ [{stepName}] 공정 특기 지시사항</Text>
+                      <Text
+                        size="sm"
+                        className="text-red-600 font-semibold print-color-exact"
+                        style={{ color: '#dc2626', fontWeight: 700, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}
+                      >
+                        {stepObj.memo.trim()}
+                      </Text>
+                    </Paper>
+                  ) : null}
+
+                  {/* 3대 기본 점검 항목 표준화 */}
                   <Stack gap={2}>
-                    <Text size="xs" c="gray.7">1. 작업 전 개인 보호구 착용 및 불티 방지포 설치 (안전수칙 준수)</Text>
-                    <Text size="xs" c="gray.7">2. 도면 치수 및 외관 사양 실측 검사 (도면 허용오차 규격)</Text>
-                    <Text size="xs" c="gray.7">3. {stepName} 공정 가공/용접 품질 검사 및 완료 후 서명 작성</Text>
+                    <Text size="xs" c="gray.7">1. 자재 수량 및 외관 찍힘 확인</Text>
+                    <Text size="xs" c="gray.7">2. 도면 치수 및 형상 사양 일치 여부 실측 점검</Text>
+                    <Text size="xs" c="gray.7">3. 작업전 후 주변 안전 환경 상태 점검</Text>
                   </Stack>
                 </Paper>
               </Stack>
@@ -1649,23 +1837,74 @@ export default function OrdersPage() {
                 : `구글 드라이브 TASS 공유 저장소 [${printWorkOrder.order.projectNo || `PRJ-${String(printWorkOrder.order.id).padStart(3, '0')}`}] 검색`}
             </div>
 
-            {/* 관리자 메모 박스 */}
+            {/* 공통 작업지시사항 및 메모 박스 */}
             <div style={{ border: '1px solid #000', padding: '3.5mm', marginBottom: '4mm', minHeight: '30mm' }}>
               <div style={{ fontWeight: 'bold', fontSize: '10.5pt', borderBottom: '1px solid #000', paddingBottom: '1.5mm', marginBottom: '2mm' }}>
-                📋 관리자 지시 사항 및 메모
+                📋 공통 작업지시사항 및 메모
               </div>
-              <div style={{ fontSize: '9.5pt', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+              <div
+                className={printWorkOrder.order.memo && printWorkOrder.order.memo.trim() ? "text-red-600 font-semibold print-color-exact" : undefined}
+                style={{
+                  fontSize: '9.5pt',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.4,
+                  color: printWorkOrder.order.memo && printWorkOrder.order.memo.trim() ? '#dc2626' : '#000000',
+                  fontWeight: printWorkOrder.order.memo && printWorkOrder.order.memo.trim() ? 700 : 400,
+                  WebkitPrintColorAdjust: 'exact',
+                  printColorAdjust: 'exact'
+                }}
+              >
                 {printWorkOrder.order.memo && printWorkOrder.order.memo.trim()
                   ? printWorkOrder.order.memo
                   : '특별 지시 사항 없음. 도면 규격 및 안전 관리 표준 프로세스에 준하여 제작을 진행해 주세요.'}
               </div>
             </div>
 
-            {/* 품질 & 안전 점검 표 */}
+            {/* [공정명] 작업지시사항 및 메모 */}
             <div style={{ marginBottom: '4mm' }}>
               <div style={{ fontWeight: 'bold', fontSize: '10pt', marginBottom: '1.5mm' }}>
-                ✅ {printWorkOrder.stepName} 공정 품질 및 안전 점검 항목
+                ✅ [{printWorkOrder.stepName}] 작업지시사항 및 메모
               </div>
+
+              {(() => {
+                const currentStepObj = printWorkOrder.order.steps?.find(s => s.name === printWorkOrder.stepName);
+                if (currentStepObj?.memo && currentStepObj.memo.trim()) {
+                  return (
+                    <div
+                      className="print-color-exact"
+                      style={{
+                        border: '1px solid #fca5a5',
+                        backgroundColor: '#fef2f2',
+                        padding: '2.5mm 3.5mm',
+                        marginBottom: '3mm',
+                        borderRadius: '3px',
+                        WebkitPrintColorAdjust: 'exact',
+                        printColorAdjust: 'exact'
+                      }}
+                    >
+                      <div style={{ fontSize: '9pt', fontWeight: 'bold', color: '#991b1b', marginBottom: '1mm' }}>
+                        ⚠️ [{printWorkOrder.stepName}] 공정 특기 지시사항
+                      </div>
+                      <div
+                        className="text-red-600 font-semibold print-color-exact"
+                        style={{
+                          fontSize: '9.5pt',
+                          color: '#dc2626',
+                          fontWeight: 700,
+                          whiteSpace: 'pre-wrap',
+                          lineHeight: 1.4,
+                          WebkitPrintColorAdjust: 'exact',
+                          printColorAdjust: 'exact'
+                        }}
+                      >
+                        {currentStepObj.memo.trim()}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f1f5f9' }}>
@@ -1678,8 +1917,8 @@ export default function OrdersPage() {
                 <tbody>
                   <tr>
                     <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>1</td>
-                    <td style={{ border: '1px solid #000', padding: '1.5mm' }}>작업 전 개인 보호구 착용 및 주변 안전 환경 상태</td>
-                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>안전수칙 준수</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm' }}>자재 수량 및 외관 찍힘 확인</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>수량/외관 검사</td>
                     <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>[ &nbsp; ] 양호 / [ &nbsp; ] 불량</td>
                   </tr>
                   <tr>
@@ -1690,8 +1929,8 @@ export default function OrdersPage() {
                   </tr>
                   <tr>
                     <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>3</td>
-                    <td style={{ border: '1px solid #000', padding: '1.5mm' }}>{printWorkOrder.stepName} 공정 마감 상태 및 외관 품질 검사</td>
-                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>외관 육안검사</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm' }}>작업전 후 주변 안전 환경 상태 점검</td>
+                    <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>안전수칙 준수</td>
                     <td style={{ border: '1px solid #000', padding: '1.5mm', textAlign: 'center' }}>[ &nbsp; ] 양호 / [ &nbsp; ] 불량</td>
                   </tr>
                 </tbody>

@@ -9,6 +9,7 @@ export type ProcessStep = {
   status: '대기' | '진행중' | '완료';
   active: boolean;
   date?: string | null;
+  memo?: string | null;
 };
 
 export type Order = {

@@ -6,6 +6,7 @@ interface ProcessStep {
   status: string;
   active: boolean;
   date?: string | null;
+  memo?: string | null;
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -36,7 +37,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           name: s.name || '',
           status: s.status || '대기',
           active: s.active !== undefined ? s.active : true,
-          date: s.date || null
+          date: s.date || null,
+          memo: s.memo || null,
         }))
       : [];
 

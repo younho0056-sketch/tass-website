@@ -186,21 +186,24 @@ export async function findOrCreateDriveFolderHierarchy(
     partnerName?: string;
     projectNo: string;
   }
-): Promise<{ rootFolderId: string; targetFolderId: string }> {
+): Promise<{ rootId: string; rootFolderId: string; partnerFolderId: string | null; projectFolderId: string | null; targetFolderId: string }> {
   // Step 1: Get Root Parent Folder (타스_도면) - throws Error if missing!
   const rootId = await getResolvedRootFolderId(drive);
+  console.log('[DEBUG-STEP 1] rootId resolved:', rootId);
 
   // Step 2: Find or create Partner Folder (e.g. '아크인터내셔널') under Root Folder
   const cleanPartnerName = partnerName && partnerName.trim() ? partnerName.trim() : '일반거래처';
   const partnerFolderId = await findOrCreateDriveSubFolder(drive, cleanPartnerName, rootId);
+  console.log('[DEBUG-STEP 2] partnerFolderId resolved:', partnerFolderId);
 
   // Step 3: Find or create Project Folder (e.g. 'PRJ-023') under Partner Folder
   const parentForProject = partnerFolderId || rootId;
   const projectFolderId = await findOrCreateDriveSubFolder(drive, projectNo, parentForProject);
+  console.log('[DEBUG-STEP 3] projectFolderId resolved:', projectFolderId);
 
   const finalTargetFolderId = projectFolderId || partnerFolderId || rootId;
 
-  console.log('[Drive Upload Debug]', { 
+  console.log('[DEBUG-STEP]', { 
     rootId, 
     partnerName: cleanPartnerName, 
     partnerFolderId, 
@@ -210,7 +213,10 @@ export async function findOrCreateDriveFolderHierarchy(
   });
 
   return {
+    rootId,
     rootFolderId: rootId,
+    partnerFolderId,
+    projectFolderId,
     targetFolderId: finalTargetFolderId
   };
 }
@@ -238,16 +244,20 @@ export async function uploadBufferToGoogleDrive({
       throw new Error(errorMsg);
     }
 
-    // Step 1 ~ 3: Hierarchy navigation (throws if rootId is missing)
-    const { targetFolderId } = await findOrCreateDriveFolderHierarchy(drive, { partnerName, projectNo });
+    // Step 1 ~ 3: Get rootId, partnerFolderId, projectFolderId
+    const { rootId, partnerFolderId, projectFolderId, targetFolderId } = await findOrCreateDriveFolderHierarchy(drive, { partnerName, projectNo });
 
-    if (!targetFolderId || typeof targetFolderId !== 'string' || !targetFolderId.trim()) {
-      const errorMsg = `[GoogleDrive Error] targetFolderId가 유효하지 않습니다. (Service Account는 개인 저장 용량이 없으므로 공유 폴더 parents 지정이 필수입니다.)`;
+    const finalFolderId = projectFolderId || targetFolderId;
+
+    console.log('[DEBUG-STEP]', { rootId, partnerFolderId, projectFolderId, finalFolderId });
+
+    if (!finalFolderId || typeof finalFolderId !== 'string' || !finalFolderId.trim()) {
+      const errorMsg = '[GoogleDrive Error] projectFolderId/targetFolderId가 유효하지 않아 파일 업로드를 중단합니다. (Service Account는 parents 지정 필수)';
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
 
-    const cleanTargetFolderId = targetFolderId.trim();
+    const cleanTargetFolderId = finalFolderId.trim();
 
     const stream = new Readable();
     stream.push(buffer);
@@ -256,7 +266,7 @@ export async function uploadBufferToGoogleDrive({
     // Step 4: drive.files.create with parents: [cleanTargetFolderId]
     const fileMetadata = {
       name: fileName,
-      parents: [cleanTargetFolderId]
+      parents: [cleanTargetFolderId] // 반드시 targetFolderId가 들어있는 string[] 배열이어야 함
     };
 
     const media = {
@@ -288,3 +298,5 @@ export async function uploadBufferToGoogleDrive({
     };
   }
 }
+
+export const uploadOrderPhoto = uploadBufferToGoogleDrive;

@@ -6,6 +6,9 @@ import {
   findOrCreateDriveFolderHierarchy 
 } from '@/lib/googleDrive';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET() {
   const emailRaw = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const keyRaw = process.env.GOOGLE_PRIVATE_KEY;

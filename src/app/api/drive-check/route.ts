@@ -75,7 +75,8 @@ export async function GET() {
       const folderRes = await drive.files.get({
         fileId: targetFolderId,
         fields: 'id, name, mimeType, permissions, driveId',
-        supportsAllDrives: true
+        supportsAllDrives: true,
+        supportsTeamDrives: true
       });
 
       folderInfo = {
@@ -90,7 +91,9 @@ export async function GET() {
           pageSize: 1,
           fields: 'files(id, name)',
           supportsAllDrives: true,
-          includeItemsFromAllDrives: true
+          includeItemsFromAllDrives: true,
+          supportsTeamDrives: true,
+          includeTeamDriveItems: true
         });
         folderInfo = {
           id: targetFolderId,

@@ -28,6 +28,14 @@ export default function AuthModal() {
     }
   }, [isAuthModalOpen]);
 
+  const isMobileDevice = () => {
+    if (typeof window === 'undefined') return false;
+    return (
+      /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      window.matchMedia('(pointer: coarse)').matches
+    );
+  };
+
   const executeLogin = (inputPin: string) => {
     if (!inputPin.trim()) {
       setError('비밀번호(PIN) 4자리를 입력해 주세요.');
@@ -52,8 +60,9 @@ export default function AuthModal() {
     setPin(val);
     setError(null);
 
-    // Auto-submit only when user physically typed/interacted and 4 digits are entered
-    if (isUserInteracted.current && val.length === 4) {
+    // [Mobile]: 4자리 입력 시 터치 편의를 위해 즉시 자동 로그인 검증 실행
+    // [PC]: 원치 않는 자동 제출 방지를 위해 Enter 키 또는 [시스템 접속] 클릭으로만 제출
+    if (isMobileDevice() && isUserInteracted.current && val.length === 4) {
       executeLogin(val);
     }
   };
@@ -74,13 +83,6 @@ export default function AuthModal() {
     isUserInteracted.current = false;
     closeAuthModal();
     router.push('/');
-  };
-
-  const handleQuickFill = (code: string) => {
-    isUserInteracted.current = true;
-    setPin(code);
-    setError(null);
-    executeLogin(code);
   };
 
   return (
@@ -114,29 +116,18 @@ export default function AuthModal() {
       <form onSubmit={handleSubmit} autoComplete="off">
         <Stack gap="md" pt="xs">
           <Text size="xs" c="dimmed" ta="center" fw={600}>
-            스마트폰 키패드로 비밀번호 4자리를 입력하면<br />
-            <Text span fw={800} c="blue.7">엔터 클릭 없이 자동으로 즉시 접속 검증</Text>됩니다.
+            TASS 시스템 접근을 위해 PIN 비밀번호 4자리를 입력해 주세요.
           </Text>
 
           <Paper p="sm" radius="md" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-            <Text size="xs" fw={700} c="gray.7" mb={6}>💡 접속 권한 안내 및 원클릭 테스트</Text>
-            <Group justify="space-between" align="center" mb={4}>
-              <Group gap="xs">
-                <Badge color="teal" size="sm" variant="filled">직원 (1234)</Badge>
-                <Text size="xs" c="gray.6">조회, 검색, A4/송장 출력</Text>
-              </Group>
-              <Button size="compact-xs" variant="light" color="teal" onClick={() => handleQuickFill('1234')}>
-                1234 즉시접속
-              </Button>
+            <Text size="xs" fw={700} c="gray.7" mb={6}>💡 접속 권한 안내</Text>
+            <Group gap="xs" mb={4}>
+              <Badge color="teal" size="sm" variant="filled">직원 권한</Badge>
+              <Text size="xs" c="gray.6">조회, 검색, A4/송장 출력 가능</Text>
             </Group>
-            <Group justify="space-between" align="center">
-              <Group gap="xs">
-                <Badge color="blue" size="sm" variant="filled">관리자 (0056)</Badge>
-                <Text size="xs" c="gray.6">등록, 수정, 삭제, AI 전권</Text>
-              </Group>
-              <Button size="compact-xs" variant="light" color="blue" onClick={() => handleQuickFill('0056')}>
-                0056 즉시접속
-              </Button>
+            <Group gap="xs">
+              <Badge color="blue" size="sm" variant="filled">관리자 권한</Badge>
+              <Text size="xs" c="gray.6">등록, 수정, 삭제, AI 전권 이용 가능</Text>
             </Group>
           </Paper>
 
@@ -146,7 +137,7 @@ export default function AuthModal() {
             </Alert>
           )}
 
-          {/* Large Mobile Numeric Keypad Input with Autofill Protection */}
+          {/* Large Mobile Numeric Keypad Input with Security Masking & Device Submission Handling */}
           <div style={{ position: 'relative' }}>
             <input
               ref={inputRef}

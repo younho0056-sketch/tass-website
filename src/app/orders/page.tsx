@@ -256,27 +256,36 @@ export default function OrdersPage() {
     
     notifications.show({
       id: `upload-${order.id}`,
-      title: '📸 현장 사진 실시간 압축 및 전송 중...',
-      message: `${projectNo} (${order.partnerName}) 프로젝트 폴더로 무저장 자동 전송 중입니다.`,
+      title: '📸 원본 현장 사진 무저장 자동 전송 중...',
+      message: `${projectNo} (${order.partnerName}) 프로젝트 폴더로 원본 사진 자동 전송 중입니다.`,
       color: 'blue',
       loading: true,
       autoClose: false
     });
 
     try {
-      // 1. Client-side Canvas Image Compression
-      const compressedFiles = await Promise.all(
-        files.map(file => compressImage(file, 1200, 1200, 0.75))
-      );
+      // 1. Try uploading raw original camera files directly
+      let formData = new FormData();
+      files.forEach(f => formData.append('files', f));
 
-      // 2. Background Upload to Server API
-      const formData = new FormData();
-      compressedFiles.forEach(f => formData.append('files', f));
-
-      const res = await fetch(`/api/orders/${order.id}/photos`, {
+      let res = await fetch(`/api/orders/${order.id}/photos`, {
         method: 'POST',
         body: formData
       });
+
+      // 2. If payload exceeds Vercel function limit (413), fallback to high quality compressed upload
+      if (res.status === 413) {
+        const compressedFiles = await Promise.all(
+          files.map(file => compressImage(file, 1600, 1600, 0.85))
+        );
+        formData = new FormData();
+        compressedFiles.forEach(f => formData.append('files', f));
+
+        res = await fetch(`/api/orders/${order.id}/photos`, {
+          method: 'POST',
+          body: formData
+        });
+      }
 
       const data = await res.json();
 
@@ -287,7 +296,7 @@ export default function OrdersPage() {
       notifications.update({
         id: `upload-${order.id}`,
         title: '✅ 현장 사진 무저장 자동 업로드 완료!',
-        message: `${projectNo} 프로젝트 폴더에 ${files.length}장의 사진이 성공적으로 저장되었습니다. (/blog 메뉴에서 확인 및 원고 작성 가능)`,
+        message: `${projectNo} 프로젝트 폴더에 ${files.length}장의 사진이 성공적으로 저장되었습니다. (/blog 메뉴에 썸네일 및 장수 실시간 반영)`,
         color: 'teal',
         loading: false,
         autoClose: 5000
@@ -1117,6 +1126,7 @@ export default function OrdersPage() {
                       onDelete={handleDelete}
                       onShowPartnerDetail={handleShowPartnerDetail}
                       onPrintSingleOrderInvoice={handlePrintSingleOrderInvoice}
+                      onUploadPhotos={handleUploadPhotos}
                     />
                   );
                 })}
@@ -1195,6 +1205,7 @@ export default function OrdersPage() {
                         onDelete={handleDelete}
                         onShowPartnerDetail={handleShowPartnerDetail}
                         onPrintSingleOrderInvoice={handlePrintSingleOrderInvoice}
+                        onUploadPhotos={handleUploadPhotos}
                       />
                     );
                   })}

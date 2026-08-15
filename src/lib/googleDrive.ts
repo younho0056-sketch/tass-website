@@ -48,7 +48,9 @@ export async function findOrCreateDriveFolder(
     const searchRes = await drive.files.list({
       q: query,
       fields: 'files(id, name)',
-      spaces: 'drive'
+      spaces: 'drive',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
     });
 
     if (searchRes.data.files && searchRes.data.files.length > 0) {
@@ -67,7 +69,8 @@ export async function findOrCreateDriveFolder(
 
     const folderRes = await drive.files.create({
       requestBody: fileMetadata,
-      fields: 'id'
+      fields: 'id',
+      supportsAllDrives: true
     });
 
     return folderRes.data.id || null;
@@ -117,7 +120,8 @@ export async function uploadBufferToGoogleDrive({
     const fileRes = await drive.files.create({
       requestBody: fileMetadata,
       media: media,
-      fields: 'id, webViewLink, webContentLink'
+      fields: 'id, webViewLink, webContentLink',
+      supportsAllDrives: true
     });
 
     return {

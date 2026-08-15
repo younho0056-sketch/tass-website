@@ -119,7 +119,7 @@ const OrderCard = memo(function OrderCard({
 
           <Stack gap={2} align="flex-end">
             <Text size="11px" c="dimmed">발주: {order.orderDate || '-'}</Text>
-            <Text size="xs" fw={isUrgent ? 600 : 500} c={isUrgent ? 'red.7' : 'dark'}>
+            <Text size="xs" fw={500} c={isUrgent ? 'red.7' : 'dark'}>
               납기: {order.dueDate || '-'}
             </Text>
           </Stack>

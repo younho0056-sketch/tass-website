@@ -30,6 +30,7 @@ export type Order = {
 };
 
 interface OrderRowProps {
+  index?: number;
   order: Order;
   daysLeft: number | null;
   isUrgent: boolean;
@@ -44,6 +45,7 @@ interface OrderRowProps {
 const DEFAULT_DRIVE_URL = 'https://drive.google.com/drive/folders/13kS6BLYxlVlTlydnv7DGBrU3jG5kjsAZ?usp=sharing';
 
 export const OrderRow = memo(function OrderRow({
+  index,
   order,
   daysLeft,
   isUrgent,
@@ -85,6 +87,11 @@ export const OrderRow = memo(function OrderRow({
         backgroundColor: isUrgent ? 'rgba(254, 226, 226, 0.40)' : undefined
       }}
     >
+      <Table.Td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+        <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', fontWeight: 500 }}>
+          {index || '-'}
+        </Text>
+      </Table.Td>
       <Table.Td>
         <Tooltip label="거래처 상세 정보 보기">
           <Text 
@@ -111,7 +118,7 @@ export const OrderRow = memo(function OrderRow({
         <Group gap={4} wrap="nowrap" align="center">
           <Text 
             size="sm" 
-            fw={isUrgent ? 600 : 500} 
+            fw={500} 
             c={isUrgent ? 'red.7' : 'dark'}
             style={{ whiteSpace: 'nowrap' }}
           >
@@ -122,7 +129,7 @@ export const OrderRow = memo(function OrderRow({
               color="red" 
               variant="filled" 
               size="xs"
-              style={{ fontWeight: 600 }}
+              style={{ fontWeight: 500 }}
             >
               {daysLeft < 0 ? `D+${Math.abs(daysLeft)}` : daysLeft === 0 ? 'D-Day' : `D-${daysLeft}`}
             </Badge>

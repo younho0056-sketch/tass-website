@@ -1144,6 +1144,7 @@ export default function OrdersPage() {
               <Table striped highlightOnHover withTableBorder verticalSpacing="md">
                 <Table.Thead>
                   <Table.Tr>
+                    <Table.Th w={50} style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>No.</Table.Th>
                     <Table.Th 
                       w={140}
                       onClick={() => handleSort('partnerName')}
@@ -1189,13 +1190,14 @@ export default function OrdersPage() {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {filteredOrders.map(o => {
+                  {filteredOrders.map((o, idx) => {
                     const daysLeft = getDaysRemaining(o.dueDate);
                     const isUrgent = o.status !== '완료' && daysLeft !== null && daysLeft <= 2;
 
                     return (
                       <OrderRow
                         key={o.id}
+                        index={idx + 1}
                         order={o}
                         daysLeft={daysLeft}
                         isUrgent={isUrgent}

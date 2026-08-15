@@ -105,7 +105,7 @@ export default function LandingPage() {
             </Text>
             <Text
               component="a"
-              href="https://www.tass-korea.com"
+              href="https://tass-korea.com"
               target="_blank"
               rel="noopener noreferrer"
               c="white"

@@ -51,11 +51,11 @@ export default function ClientShell({ children }: { children: React.ReactNode })
           borderRadius: 0 
         }}
       >
-        <Group h="100%" px="md" justify="space-between">
-          <Group gap="md" align="center">
+        <Group h="100%" px={{ base: 'xs', sm: 'md' }} justify="space-between" wrap="nowrap">
+          <Group gap="xs" align="center" wrap="nowrap">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" color="#ffffff" />
             <Link href="/" style={{ textDecoration: 'none' }}>
-              <Group gap="xs" style={{ cursor: 'pointer' }}>
+              <Group gap="xs" style={{ cursor: 'pointer' }} wrap="nowrap">
                 <div style={{
                   backgroundColor: '#2563eb',
                   color: '#ffffff',
@@ -70,29 +70,41 @@ export default function ClientShell({ children }: { children: React.ReactNode })
                 }}>
                   TASS
                 </div>
-                <Title order={3} style={{ color: '#ffffff', fontWeight: 800, fontSize: '18px', letterSpacing: '0.3px' }}>
+                <Title order={3} visibleFrom="sm" style={{ color: '#ffffff', fontWeight: 800, fontSize: '18px', letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>
                   TASS 관리자 시스템
                 </Title>
               </Group>
             </Link>
 
-            <BgmPlayer />
+            <Box visibleFrom="sm">
+              <BgmPlayer />
+            </Box>
           </Group>
 
-          <Group gap="sm" align="center">
+          <Group gap="xs" align="center" wrap="nowrap">
             <PWAInstallButton />
             
             {/* 권한 상태 표시 배지 */}
             {isAuthenticated ? (
-              <Group gap="xs" align="center">
+              <Group gap={4} align="center" wrap="nowrap">
                 {role === 'admin' ? (
-                  <Badge color="blue" size="md" variant="filled" radius="md" leftSection={<IconKey size={12} />} style={{ borderRadius: '6px' }}>
-                    🔑 관리자 (수정권한)
-                  </Badge>
+                  <>
+                    <Badge visibleFrom="sm" color="blue" size="md" variant="filled" radius="md" leftSection={<IconKey size={12} />} style={{ borderRadius: '6px' }}>
+                      🔑 관리자 (수정권한)
+                    </Badge>
+                    <Badge hiddenFrom="sm" color="blue" size="xs" variant="filled" radius="md" style={{ borderRadius: '6px', paddingLeft: '4px', paddingRight: '4px' }}>
+                      🔑 관리자
+                    </Badge>
+                  </>
                 ) : (
-                  <Badge color="teal" size="md" variant="filled" radius="md" style={{ borderRadius: '6px' }}>
-                    👁️ 직원 (조회/출력)
-                  </Badge>
+                  <>
+                    <Badge visibleFrom="sm" color="teal" size="md" variant="filled" radius="md" style={{ borderRadius: '6px' }}>
+                      👁️ 직원 (조회/출력)
+                    </Badge>
+                    <Badge hiddenFrom="sm" color="teal" size="xs" variant="filled" radius="md" style={{ borderRadius: '6px', paddingLeft: '4px', paddingRight: '4px' }}>
+                      👁️ 직원
+                    </Badge>
+                  </>
                 )}
                 <Button 
                   size="xs" 
@@ -101,9 +113,10 @@ export default function ClientShell({ children }: { children: React.ReactNode })
                   radius="md"
                   onClick={logout}
                   leftSection={<IconLogout size={14} />}
+                  px={{ base: 6, sm: 'xs' }}
                   style={{ borderRadius: '6px' }}
                 >
-                  로그아웃
+                  <span className="hidden sm:inline">로그아웃</span>
                 </Button>
               </Group>
             ) : (
@@ -113,9 +126,11 @@ export default function ClientShell({ children }: { children: React.ReactNode })
                 radius="md"
                 onClick={() => openAuthModal(pathname)}
                 leftSection={<IconLock size={14} />}
+                px={{ base: 6, sm: 'xs' }}
                 style={{ borderRadius: '6px' }}
               >
-                비밀번호 입력
+                <span className="hidden sm:inline">비밀번호 입력</span>
+                <span className="inline sm:hidden">인증</span>
               </Button>
             )}
           </Group>

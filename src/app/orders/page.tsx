@@ -19,6 +19,7 @@ import * as XLSX from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
 import { useAuth } from '@/context/AuthContext';
 import OrderRow, { Order, ProcessStep } from '@/components/OrderRow';
+import OrderCard from '@/components/OrderCard';
 
 type PartnerDetail = {
   id: number;
@@ -239,7 +240,63 @@ export default function OrdersPage() {
     setEditingOrder(null);
   }, [orders]);
 
-  const { canEdit } = useAuth();
+  const { canEdit, isAuthenticated, openAuthModal } = useAuth();
+
+  const handleUploadPhotos = useCallback(async (order: Order, files: File[]) => {
+    if (!isAuthenticated) {
+      alert('사진 업로드를 위해 시스템 접속 인증이 필요합니다.');
+      openAuthModal('/orders');
+      return;
+    }
+
+    if (!files || files.length === 0) return;
+
+    const projectNo = order.projectNo || `PRJ-${String(order.id).padStart(3, '0')}`;
+    
+    notifications.show({
+      id: `upload-${order.id}`,
+      title: '📸 현장 사진 전송 중...',
+      message: `${projectNo} (${order.partnerName}) 프로젝트 폴더로 무저장 자동 업로드 중입니다.`,
+      color: 'blue',
+      loading: true,
+      autoClose: false
+    });
+
+    try {
+      const formData = new FormData();
+      files.forEach(f => formData.append('files', f));
+
+      const res = await fetch(`/api/orders/${order.id}/photos`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      notifications.update({
+        id: `upload-${order.id}`,
+        title: '✅ 현장 사진 무저장 자동 업로드 완료!',
+        message: `${projectNo} 프로젝트 폴더에 ${files.length}장의 사진이 누적 저장되었습니다. (추후 블로그 포스팅 관리에서 사용 가능)`,
+        color: 'teal',
+        loading: false,
+        autoClose: 4500
+      });
+    } catch (err: any) {
+      console.error('Field photo upload error:', err);
+      notifications.update({
+        id: `upload-${order.id}`,
+        title: '❌ 사진 업로드 실패',
+        message: err.message || '사진 업로드 중 오류가 발생했습니다.',
+        color: 'red',
+        loading: false,
+        autoClose: 4000
+      });
+    }
+  }, [isAuthenticated, openAuthModal]);
 
   const handleOpenCreate = useCallback(() => {
     if (!canEdit) {
@@ -945,63 +1002,17 @@ export default function OrdersPage() {
             </div>
           </Paper>
         ) : (
-          /* 공정 진척도 관리 테이블 (OrderRow Component Memoized) */
-          <div className="glass-panel table-responsive-container" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <Table striped highlightOnHover withTableBorder verticalSpacing="md">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th w={75} style={{ whiteSpace: 'nowrap' }}>상태</Table.Th>
-                  <Table.Th 
-                    w={140}
-                    onClick={() => handleSort('partnerName')}
-                    style={{ cursor: 'pointer', userSelect: 'none' }}
-                  >
-                    <Group gap={4} wrap="nowrap" align="center">
-                      <Text fw={700} size="sm">거래처명</Text>
-                      {renderSortIcon('partnerName')}
-                    </Group>
-                  </Table.Th>
-                  <Table.Th w={110} style={{ whiteSpace: 'nowrap' }}>프로젝트 번호</Table.Th>
-                  <Table.Th w={130}>품목/수량</Table.Th>
-                  <Table.Th 
-                    w={110} 
-                    style={{ whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
-                    onClick={() => handleSort('orderDate')}
-                  >
-                    <Group gap={4} wrap="nowrap" align="center">
-                      <Text fw={700} size="sm">발주일</Text>
-                      {renderSortIcon('orderDate')}
-                    </Group>
-                  </Table.Th>
-                  <Table.Th 
-                    w={110} 
-                    style={{ whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
-                    onClick={() => handleSort('dueDate')}
-                  >
-                    <Group gap={4} wrap="nowrap" align="center">
-                      <Text fw={700} size="sm">납기일</Text>
-                      {renderSortIcon('dueDate')}
-                    </Group>
-                  </Table.Th>
-                  <Table.Th 
-                    style={{ minWidth: 340, cursor: 'pointer', userSelect: 'none' }}
-                    onClick={() => handleSort('progressPercent')}
-                  >
-                    <Group gap={4} wrap="nowrap" align="center">
-                      <Text fw={700} size="sm">공정 진척도 (라이브 스텝 체크 & 날짜)</Text>
-                      {renderSortIcon('progressPercent')}
-                    </Group>
-                  </Table.Th>
-                  <Table.Th w={110} style={{ whiteSpace: 'nowrap' }}>작업</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
+          /* 공정 진척도 관리 뷰 (모바일 간편 카드 뷰 vs 데스크톱 테이블 뷰) */
+          <>
+            {/* 1. 모바일 전용 반응형 카드 뷰 (sm 미만 스크린) */}
+            <div className="block sm:hidden">
+              <Stack gap="xs">
                 {filteredOrders.map(o => {
                   const daysLeft = getDaysRemaining(o.dueDate);
                   const isUrgent = o.status !== '완료' && daysLeft !== null && daysLeft <= 2;
 
                   return (
-                    <OrderRow
+                    <OrderCard
                       key={o.id}
                       order={o}
                       daysLeft={daysLeft}
@@ -1011,20 +1022,101 @@ export default function OrdersPage() {
                       onDelete={handleDelete}
                       onShowPartnerDetail={handleShowPartnerDetail}
                       onPrintSingleOrderInvoice={handlePrintSingleOrderInvoice}
+                      onUploadPhotos={handleUploadPhotos}
                     />
                   );
                 })}
 
                 {filteredOrders.length === 0 && (
-                  <Table.Tr>
-                    <Table.Td colSpan={8} ta="center" py="xl" c="dimmed">
-                      조건에 일치하는 수주 건이 없습니다.
-                    </Table.Td>
-                  </Table.Tr>
+                  <Paper p="xl" radius="md" className="glass-panel" style={{ textAlign: 'center' }}>
+                    <Text c="dimmed">조건에 일치하는 수주 건이 없습니다.</Text>
+                  </Paper>
                 )}
-              </Table.Tbody>
-            </Table>
-          </div>
+              </Stack>
+            </div>
+
+            {/* 2. 데스크톱/태블릿 표 뷰 (sm 이상 스크린) */}
+            <div className="hidden sm:block glass-panel table-responsive-container" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <Table striped highlightOnHover withTableBorder verticalSpacing="md">
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th w={75} style={{ whiteSpace: 'nowrap' }}>상태</Table.Th>
+                    <Table.Th 
+                      w={140}
+                      onClick={() => handleSort('partnerName')}
+                      style={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <Group gap={4} wrap="nowrap" align="center">
+                        <Text fw={700} size="sm">거래처명</Text>
+                        {renderSortIcon('partnerName')}
+                      </Group>
+                    </Table.Th>
+                    <Table.Th w={110} style={{ whiteSpace: 'nowrap' }}>프로젝트 번호</Table.Th>
+                    <Table.Th w={130}>품목/수량</Table.Th>
+                    <Table.Th 
+                      w={110} 
+                      style={{ whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
+                      onClick={() => handleSort('orderDate')}
+                    >
+                      <Group gap={4} wrap="nowrap" align="center">
+                        <Text fw={700} size="sm">발주일</Text>
+                        {renderSortIcon('orderDate')}
+                      </Group>
+                    </Table.Th>
+                    <Table.Th 
+                      w={110} 
+                      style={{ whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
+                      onClick={() => handleSort('dueDate')}
+                    >
+                      <Group gap={4} wrap="nowrap" align="center">
+                        <Text fw={700} size="sm">납기일</Text>
+                        {renderSortIcon('dueDate')}
+                      </Group>
+                    </Table.Th>
+                    <Table.Th 
+                      style={{ minWidth: 340, cursor: 'pointer', userSelect: 'none' }}
+                      onClick={() => handleSort('progressPercent')}
+                    >
+                      <Group gap={4} wrap="nowrap" align="center">
+                        <Text fw={700} size="sm">공정 진척도 (라이브 스텝 체크 & 날짜)</Text>
+                        {renderSortIcon('progressPercent')}
+                      </Group>
+                    </Table.Th>
+                    <Table.Th w={110} style={{ whiteSpace: 'nowrap' }}>작업</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {filteredOrders.map(o => {
+                    const daysLeft = getDaysRemaining(o.dueDate);
+                    const isUrgent = o.status !== '완료' && daysLeft !== null && daysLeft <= 2;
+
+                    return (
+                      <OrderRow
+                        key={o.id}
+                        order={o}
+                        daysLeft={daysLeft}
+                        isUrgent={isUrgent}
+                        onToggleStep={handleToggleStep}
+                        onOpenEdit={handleOpenEdit}
+                        onDelete={handleDelete}
+                        onShowPartnerDetail={handleShowPartnerDetail}
+                        onPrintSingleOrderInvoice={handlePrintSingleOrderInvoice}
+                        onUploadPhotos={handleUploadPhotos}
+                      />
+                    );
+                  })}
+
+                  {filteredOrders.length === 0 && (
+                    <Table.Tr>
+                      <Table.Td colSpan={8} ta="center" py="xl" c="dimmed">
+                        조건에 일치하는 수주 건이 없습니다.
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
+                </Table.Tbody>
+              </Table>
+            </div>
+          </>
         )}
 
         {/* 수주 등록 / 수정 모달 */}

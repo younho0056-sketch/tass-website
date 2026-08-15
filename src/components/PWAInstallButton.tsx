@@ -72,27 +72,40 @@ export default function PWAInstallButton({ variant = 'header' }: { variant?: 'he
   if (isInstalled) {
     return (
       <Tooltip label="TASS PC 전용 단독 앱이 실행 중입니다" position="bottom" withArrow>
-        <Badge
-          color="green"
-          variant="light"
-          size="md"
-          radius="md"
-          leftSection={<IconCheck size={14} />}
-          style={{ 
-            cursor: 'default', 
-            textTransform: 'none', 
-            height: '32px',
-            borderRadius: '6px',
-            fontWeight: 700,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingLeft: '10px',
-            paddingRight: '10px'
-          }}
-        >
-          PC 앱 실행 중
-        </Badge>
+        <div>
+          <Badge
+            color="green"
+            variant="light"
+            size="md"
+            radius="md"
+            leftSection={<IconCheck size={14} />}
+            visibleFrom="sm"
+            style={{ 
+              cursor: 'default', 
+              textTransform: 'none', 
+              height: '32px',
+              borderRadius: '6px',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingLeft: '10px',
+              paddingRight: '10px'
+            }}
+          >
+            PC 앱 실행 중
+          </Badge>
+          <Badge
+            color="green"
+            variant="light"
+            size="sm"
+            radius="xl"
+            hiddenFrom="sm"
+            style={{ cursor: 'default', padding: '4px 6px' }}
+          >
+            <IconCheck size={12} />
+          </Badge>
+        </div>
       </Tooltip>
     );
   }
@@ -114,7 +127,12 @@ export default function PWAInstallButton({ variant = 'header' }: { variant?: 'he
             transition: 'transform 0.2s ease, box-shadow 0.2s ease',
           }}
         >
-          📱 PC 앱 설치
+          {variant === 'hero' ? '📱 PC 앱 설치' : (
+            <>
+              <span className="hidden sm:inline">📱 PC 앱 설치</span>
+              <span className="inline sm:hidden">📱 앱 설치</span>
+            </>
+          )}
         </Button>
       </Tooltip>
 

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { memo } from 'react';
+import React, { memo, useRef } from 'react';
 import { Table, Badge, Tooltip, Text, Group, Stack, Progress, ActionIcon } from '@mantine/core';
-import { IconPencil, IconPrinter, IconTrash, IconFolderOpen } from '@tabler/icons-react';
+import { IconPencil, IconPrinter, IconTrash, IconFolderOpen, IconCamera } from '@tabler/icons-react';
 
 export type ProcessStep = {
   name: string;
@@ -38,6 +38,7 @@ interface OrderRowProps {
   onDelete: (id: number) => void;
   onShowPartnerDetail: (partnerName: string, order?: Order) => void;
   onPrintSingleOrderInvoice: (order: Order) => void;
+  onUploadPhotos?: (order: Order, files: File[]) => void;
 }
 
 const DEFAULT_DRIVE_URL = 'https://drive.google.com/drive/folders/13kS6BLYxlVlTlydnv7DGBrU3jG5kjsAZ?usp=sharing';
@@ -50,8 +51,10 @@ const OrderRow = memo(function OrderRow({
   onOpenEdit,
   onDelete,
   onShowPartnerDetail,
-  onPrintSingleOrderInvoice
+  onPrintSingleOrderInvoice,
+  onUploadPhotos
 }: OrderRowProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const displayProjectNo = order.projectNo || `PRJ-${String(order.id).padStart(3, '0')}`;
 
   const handleOpenDrawing = () => {
@@ -60,6 +63,19 @@ const OrderRow = memo(function OrderRow({
     } else {
       const searchUrl = `https://drive.google.com/drive/u/0/search?q=${encodeURIComponent(displayProjectNo)}`;
       window.open(searchUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleCameraClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0 && onUploadPhotos) {
+      onUploadPhotos(order, Array.from(e.target.files));
+      e.target.value = '';
     }
   };
 
@@ -170,10 +186,24 @@ const OrderRow = memo(function OrderRow({
         </Stack>
       </Table.Td>
       <Table.Td>
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept="image/*"
+          capture="environment"
+          multiple
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
         <Group gap={4} wrap="nowrap">
           <Tooltip label={order.drawingUrl && order.drawingUrl.trim() ? "등록된 개별 도면 드라이브 열기" : `구글 드라이브 [${displayProjectNo}] 도면 폴더 자동 검색`}>
             <ActionIcon color={order.drawingUrl && order.drawingUrl.trim() ? "teal.7" : "blue.6"} variant="light" size="sm" onClick={handleOpenDrawing}>
               <IconFolderOpen size={17} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label={`현장 촬영 무저장 자동 업로드 (${displayProjectNo})`}>
+            <ActionIcon color="indigo.6" variant="filled" size="sm" onClick={handleCameraClick}>
+              <IconCamera size={16} />
             </ActionIcon>
           </Tooltip>
           <Tooltip label="수정">

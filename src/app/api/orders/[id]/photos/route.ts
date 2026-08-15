@@ -106,7 +106,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           fileName: driveFileName,
           mimeType: file.type || 'image/jpeg',
           buffer,
-          projectNo
+          projectNo,
+          partnerName: order.partnerName
         }).catch(err => console.error('[Background Drive Upload Failed]:', err));
 
         // 3. Create BlogPhoto record for instant web gallery

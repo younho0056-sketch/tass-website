@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
-import { google } from 'googleapis';
-import { getGoogleDriveClient } from '@/lib/googleDrive';
+import { 
+  getGoogleDriveClient, 
+  getRootParentFolder, 
+  findSharedWithMeFolders, 
+  findOrCreateDriveFolderHierarchy 
+} from '@/lib/googleDrive';
 
 export async function GET() {
   const emailRaw = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const keyRaw = process.env.GOOGLE_PRIVATE_KEY;
   const parentFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
 
-  // Mask email for security
+  // Mask email for privacy
   let maskedEmail = '미설정';
   if (emailRaw) {
     const parts = emailRaw.split('@');
@@ -68,55 +72,41 @@ export async function GET() {
       }, { status: 400 });
     }
 
-    let folderInfo = null;
-    const targetFolderId = parentFolderId || '13kS6BLYxlVlTlydnv7DGBrU3jG5kjsAZ';
+    // 1. Check Shared Folders List (sharedWithMe)
+    const sharedFolders = await findSharedWithMeFolders(drive);
+    const sharedFolderSummary = sharedFolders.map(f => ({
+      id: f.id,
+      name: f.name,
+      mimeType: f.mimeType
+    }));
 
-    try {
-      const folderRes = await drive.files.get({
-        fileId: targetFolderId,
-        fields: 'id, name, mimeType, permissions, driveId',
-        supportsAllDrives: true,
-        supportsTeamDrives: true
+    // 2. Resolve Root Parent Folder (Direct ID -> Name '타스_도면' -> SharedWithMe)
+    const rootFolder = await getRootParentFolder(drive);
+
+    // 3. Test Folder Hierarchy Creation (타스_도면 -> (주)타스 -> PRJ-TEST)
+    let hierarchyTest = null;
+    if (rootFolder) {
+      hierarchyTest = await findOrCreateDriveFolderHierarchy(drive, {
+        partnerName: '(주)타스_테스트',
+        projectNo: 'PRJ-TEST-DIAGNOSIS'
       });
-
-      folderInfo = {
-        id: folderRes.data.id,
-        name: folderRes.data.name,
-        mimeType: folderRes.data.mimeType
-      };
-    } catch (folderErr: any) {
-      // If specific parent folder fails, try listing general files
-      try {
-        const listRes = await drive.files.list({
-          pageSize: 1,
-          fields: 'files(id, name)',
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-          supportsTeamDrives: true,
-          includeTeamDriveItems: true
-        });
-        folderInfo = {
-          id: targetFolderId,
-          name: `조회 실패 (${folderErr.message || '권한 없음'}), root 접속 가능`,
-          rootFilesCount: listRes.data.files?.length || 0
-        };
-      } catch (listErr: any) {
-        return NextResponse.json({
-          ok: false,
-          error: '구글 드라이브 API 인증 실패 / 폴더 접근 권한 없음',
-          message: `서비스 계정이 드라이브 폴더(${targetFolderId})에 접근할 수 없습니다. 서비스 계정 이메일(${maskedEmail})을 구글 드라이브 지정 폴더에 편집자 권한으로 공유해 주셨는지 확인해 주세요. (원인: ${folderErr.message || listErr.message})`,
-          serviceAccount: maskedEmail,
-          keyInfo
-        }, { status: 403 });
-      }
     }
 
     return NextResponse.json({
       ok: true,
-      message: `✅ Google Drive API 정상 연결 성공! (연결된 폴더: ${folderInfo?.name || targetFolderId})`,
+      message: `✅ Google Drive API 정상 연동 성공! (기준 폴더: ${rootFolder?.name || '탐색 완료'}, 탐색방식: ${rootFolder?.method || '자동탐색'})`,
       serviceAccount: maskedEmail,
       keyInfo,
-      parentFolder: folderInfo
+      rootParentFolder: rootFolder || { message: '기준 폴더를 찾을 수 없습니다. 서비스 계정에 폴더를 공유해 주세요.' },
+      sharedWithMeFolders: {
+        count: sharedFolders.length,
+        folders: sharedFolderSummary
+      },
+      hierarchyTestResult: {
+        structure: '타스_도면 ➔ (주)타스_테스트 ➔ PRJ-TEST-DIAGNOSIS',
+        resolvedRootId: hierarchyTest?.rootFolderId || null,
+        resolvedTargetFolderId: hierarchyTest?.targetFolderId || null
+      }
     });
   } catch (err: any) {
     console.error('[DriveCheck Route Error]:', err);

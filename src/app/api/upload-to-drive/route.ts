@@ -6,6 +6,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const files = formData.getAll('files') as File[];
     const projectNo = (formData.get('projectNo') as string) || 'PRJ-GENERAL';
+    const partnerName = (formData.get('partnerName') as string) || undefined;
 
     if (!files || files.length === 0) {
       return NextResponse.json({ error: 'No files provided for Google Drive upload' }, { status: 400 });
@@ -22,7 +23,8 @@ export async function POST(request: Request) {
           fileName,
           mimeType: file.type || 'image/jpeg',
           buffer,
-          projectNo
+          projectNo,
+          partnerName
         });
       })
     );

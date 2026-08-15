@@ -89,7 +89,33 @@ export default function LandingPage() {
             </Text>
           </Group>
 
-          <BgmPlayer />
+          <Group gap="md" align="center" visibleFrom="sm">
+            <BgmPlayer />
+            <Text
+              component="a"
+              href="https://miro.com/welcomeonboard/SGlTYUl4SGNxU3FYODN1cmNhcUhObEcwdlVKeVA2OVU2R1U0dmtETHRVbUlNWHlndStSLzBGamRmQ2tPS0dpSVJVNi9tT0V2TjlSTEFtdTB3UVh2NnRXNUFiYmIwTUNzZlNmbkd2UVYzb0ZJSU5TTXJmL0Q1a2xQYjRtRVQ3Y3N0R2lncW1vRmFBVnlLcVJzTmdFdlNRPT0hdjE=?share_link_id=662419925150"
+              target="_blank"
+              rel="noopener noreferrer"
+              c="white"
+              fw={700}
+              size="sm"
+              style={{ textDecoration: 'none', cursor: 'pointer', opacity: 0.9, transition: 'opacity 0.2s', display: 'inline-flex', alignItems: 'center' }}
+            >
+              미로
+            </Text>
+            <Text
+              component="a"
+              href="https://www.tass-korea.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              c="white"
+              fw={700}
+              size="sm"
+              style={{ textDecoration: 'none', cursor: 'pointer', opacity: 0.9, transition: 'opacity 0.2s', display: 'inline-flex', alignItems: 'center' }}
+            >
+              타스홈페이지
+            </Text>
+          </Group>
         </Group>
 
         {/* GNB Navigation Links: [회사소개 / 주요파트너사] -> [주요제품] -> [고객지원] */}

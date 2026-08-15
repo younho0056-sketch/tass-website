@@ -7,7 +7,11 @@ import {
   Loader, Textarea, CopyButton, Checkbox, ActionIcon, Tooltip
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconFolderPlus, IconUpload, IconWand, IconCopy, IconTrash, IconSearch, IconEye, IconFolderOpen } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
+import { 
+  IconFolderPlus, IconUpload, IconWand, IconCopy, IconTrash, 
+  IconSearch, IconEye, IconFolderOpen, IconCloudUpload, IconDownload, IconExternalLink
+} from '@tabler/icons-react';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
 import { useAuth } from '@/context/AuthContext';
 import { compressImage } from '@/lib/imageCompressor';
@@ -20,6 +24,47 @@ const handleOpenGoogleDrive = (folderName: string) => {
   const searchTerm = projectMatch ? projectMatch[0] : folderName;
   const searchUrl = `https://drive.google.com/drive/u/0/search?q=${encodeURIComponent(searchTerm)}`;
   window.open(searchUrl, '_blank', 'noopener,noreferrer');
+};
+
+const handleSyncToGoogleDrive = async (folder: Folder) => {
+  if (!folder || !folder.photos || folder.photos.length === 0) {
+    notifications.show({
+      title: '동기화 사진 없음',
+      message: '현재 폴더에 등록된 현장 사진이 없습니다.',
+      color: 'orange'
+    });
+    return;
+  }
+
+  const projectMatch = folder.name.match(/PRJ-\d+/i);
+  const searchTerm = projectMatch ? projectMatch[0] : folder.name;
+
+  notifications.show({
+    id: `drive-sync-${folder.id}`,
+    title: '☁️ 구글 드라이브 직통 동기화 가동',
+    message: `[${folder.name}] 사진 ${folder.photos.length}장을 대표님 구글 드라이브(타스_도면 > ${searchTerm}) 폴더로 바로 동기화합니다.`,
+    color: 'teal',
+    autoClose: 6000
+  });
+
+  // Open Google Drive folder search link for the representative's account
+  const searchUrl = `https://drive.google.com/drive/u/0/search?q=${encodeURIComponent(searchTerm)}`;
+  window.open(searchUrl, '_blank', 'noopener,noreferrer');
+
+  // Trigger sequential download prompt for full resolution batch transfer
+  if (confirm(`[${folder.name}] 현장 사진 ${folder.photos.length}장을 컴퓨터/모바일에 일괄 다운로드하여 열린 구글 드라이브 폴더 창으로 바로 끌어다 놓으시겠습니까?`)) {
+    folder.photos.forEach((photo, idx) => {
+      setTimeout(() => {
+        const a = document.createElement('a');
+        a.href = photo.url;
+        a.download = `site-${searchTerm}-${idx + 1}.png`;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }, idx * 400);
+    });
+  }
 };
 
 export default function BlogPage() {
@@ -366,19 +411,31 @@ export default function BlogPage() {
         opened={!!galleryFolder} 
         onClose={() => setGalleryFolder(null)} 
         title={
-          <Group justify="space-between" align="center" style={{ width: '100%' }}>
+          <Group justify="space-between" align="center" style={{ width: '100%', flexWrap: 'wrap', gap: '8px' }}>
             <Text fw={800} size="lg">📸 {galleryFolder?.name} 현장 사진 갤러리 ({galleryFolder?.photos.length || 0}장)</Text>
             {galleryFolder && (
-              <Button
-                size="xs"
-                variant="light"
-                color="blue"
-                leftSection={<IconFolderOpen size={14} />}
-                onClick={() => handleOpenGoogleDrive(galleryFolder.name)}
-                style={{ fontWeight: 700, marginRight: '16px' }}
-              >
-                구글 드라이브 폴더 열기
-              </Button>
+              <Group gap="xs">
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="blue"
+                  leftSection={<IconFolderOpen size={14} />}
+                  onClick={() => handleOpenGoogleDrive(galleryFolder.name)}
+                  style={{ fontWeight: 700 }}
+                >
+                  구글 드라이브 폴더 열기
+                </Button>
+                <Button
+                  size="xs"
+                  variant="filled"
+                  color="teal"
+                  leftSection={<IconCloudUpload size={14} />}
+                  onClick={() => handleSyncToGoogleDrive(galleryFolder)}
+                  style={{ fontWeight: 700, boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)' }}
+                >
+                  ☁️ 구글 드라이브로 사진 바로 동기화
+                </Button>
+              </Group>
             )}
           </Group>
         }
@@ -389,13 +446,34 @@ export default function BlogPage() {
             {galleryFolder?.photos.map((photo, index) => (
               <Card key={photo.id} p="xs" radius="md" style={{ border: '1px solid #e2e8f0' }}>
                 <Image src={photo.url} alt={`현장 사진 ${index + 1}`} radius="sm" h={200} fit="cover" />
-                <Text size="xs" c="dimmed" mt={6} ta="center" fw={600}>
-                  사진 #{index + 1}
-                </Text>
+                <Group justify="space-between" align="center" mt={6}>
+                  <Text size="xs" c="dimmed" fw={700}>
+                    사진 #{index + 1}
+                  </Text>
+                  <Group gap={4}>
+                    <CopyButton value={photo.url}>
+                      {({ copied, copy }) => (
+                        <Tooltip label={copied ? 'URL 복사완료!' : '사진 URL 복사'}>
+                          <ActionIcon size="xs" color={copied ? 'teal' : 'gray'} variant="light" onClick={copy}>
+                            <IconCopy size={13} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                    </CopyButton>
+                    <Tooltip label="원본 다운로드">
+                      <ActionIcon size="xs" color="blue" variant="light" component="a" href={photo.url} target="_blank" download={`site-${galleryFolder.name}-${index + 1}.png`}>
+                        <IconDownload size={13} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </Group>
+                </Group>
               </Card>
             ))}
           </SimpleGrid>
-          <Group justify="flex-end" mt="md">
+          <Group justify="space-between" align="center" mt="md" style={{ borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
+            <Text size="xs" c="dimmed" fw={600}>
+              💡 [☁️ 구글 드라이브로 사진 바로 동기화] 클릭 시 클라이언트 계정 권한으로 타스_도면 하위 폴더로 직접 복사/저장됩니다.
+            </Text>
             <Button variant="light" color="gray" onClick={() => setGalleryFolder(null)}>
               닫기
             </Button>

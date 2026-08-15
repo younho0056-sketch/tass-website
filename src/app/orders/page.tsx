@@ -7,13 +7,13 @@ import {
   Button, Stack, Group, Text, Badge, TextInput, 
   Modal, Select, Table, Tooltip, Progress,
   NumberInput, SimpleGrid, Textarea, Checkbox,
-  SegmentedControl, Card, Paper, Loader, Center
+  SegmentedControl, Card, Paper, Loader, Center, Alert
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { 
   IconPlus, IconSearch, 
   IconPhone, IconMail, IconPrinter, IconDownload,
-  IconChevronLeft, IconChevronRight, IconFolderOpen, IconPencil
+  IconChevronLeft, IconChevronRight, IconFolderOpen, IconPencil, IconAlertCircle
 } from '@tabler/icons-react';
 import * as XLSX from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
@@ -177,6 +177,16 @@ export default function OrdersPage() {
   const [isEditingStepMemo, setIsEditingStepMemo] = useState(false);
   const [stepMemoDraft, setStepMemoDraft] = useState('');
   const [isSavingMemo, setIsSavingMemo] = useState(false);
+
+  // PIN Auth Lock Modal State
+  const [pinAuthModalOpened, { open: openPinAuthModal, close: closePinAuthModal }] = useDisclosure(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<
+    | { type: 'TOGGLE_STEP'; order: Order; stepName: string }
+    | { type: 'DELETE_ORDER'; id: number }
+    | null
+  >(null);
 
   // Form State
   const [projectNo, setProjectNo] = useState('');
@@ -435,13 +445,7 @@ export default function OrdersPage() {
     }
   }, [canEdit, activeStepNames, editingOrder, projectNo, drawingUrl, partnerName, itemName, quantity, orderDate, dueDate, memo, close, resetForm, mutateOrders]);
 
-  // Optimistic Update with instant 0ms state mutation, auto date (M/D) recording, and background API call + rollback on error
-  const handleToggleStep = useCallback(async (order: Order, stepName: string) => {
-    if (!canEdit) {
-      alert('직원 권한(1234)은 공정 단계 변경이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
-      return;
-    }
-
+  const executeToggleStep = useCallback(async (order: Order, stepName: string) => {
     const updatedSteps = order.steps.map(s => {
       if (s.name === stepName) {
         const nextStatus: '대기' | '진행중' | '완료' = 
@@ -529,29 +533,73 @@ export default function OrdersPage() {
         autoClose: 4000
       });
     }
-  }, [canEdit, mutateOrders]);
+  }, [mutateOrders]);
+
+  const handleToggleStep = useCallback(async (order: Order, stepName: string) => {
+    if (!canEdit) {
+      alert('직원 권한(1234)은 공정 단계 변경이 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
+      return;
+    }
+
+    const targetStep = order.steps?.find(s => s.name === stepName);
+    if (targetStep && targetStep.status === '완료') {
+      // 이미 '완료' 처리된 공정 클릭 시 실수 변경 방지를 위해 관리자 PIN 인증(0056) 필요
+      setPendingAction({ type: 'TOGGLE_STEP', order, stepName });
+      setPinInput('');
+      setPinError(null);
+      openPinAuthModal();
+      return;
+    }
+
+    executeToggleStep(order, stepName);
+  }, [canEdit, executeToggleStep, openPinAuthModal]);
+
+  const executeDeleteOrder = useCallback(async (id: number) => {
+    setOrders(prev => prev.filter(o => o.id !== id));
+    try {
+      const res = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete error');
+      if (mutateOrders) mutateOrders();
+    } catch (e) {
+      notifications.show({
+        title: '삭제 실패',
+        message: '수주 삭제 처리 중 오류가 발생했습니다.',
+        color: 'red'
+      });
+      if (mutateOrders) mutateOrders();
+    }
+  }, [mutateOrders]);
 
   const handleDelete = useCallback(async (id: number) => {
     if (!canEdit) {
       alert('직원 권한(1234)은 수주 삭제가 불가능합니다. 관리자 비밀번호(0056)로 로그인해 주세요.');
       return;
     }
-    if (confirm('이 수주 건을 삭제하시겠습니까?')) {
-      setOrders(prev => prev.filter(o => o.id !== id));
-      try {
-        const res = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Delete error');
-        if (mutateOrders) mutateOrders();
-      } catch (e) {
-        notifications.show({
-          title: '삭제 실패',
-          message: '수주 삭제 처리 중 오류가 발생했습니다.',
-          color: 'red'
-        });
-        if (mutateOrders) mutateOrders();
+
+    setPendingAction({ type: 'DELETE_ORDER', id });
+    setPinInput('');
+    setPinError(null);
+    openPinAuthModal();
+  }, [canEdit, openPinAuthModal]);
+
+  const handlePinAuthSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinInput.trim() === '0056') {
+      const action = pendingAction;
+      closePinAuthModal();
+      setPinInput('');
+      setPinError(null);
+      setPendingAction(null);
+
+      if (action?.type === 'TOGGLE_STEP') {
+        executeToggleStep(action.order, action.stepName);
+      } else if (action?.type === 'DELETE_ORDER') {
+        executeDeleteOrder(action.id);
       }
+    } else {
+      setPinError('관리자 PIN(0056)이 올바르지 않습니다.');
     }
-  }, [canEdit, mutateOrders]);
+  }, [pinInput, pendingAction, closePinAuthModal, executeToggleStep, executeDeleteOrder]);
 
   const handlePrintPartnerInvoice = useCallback((partner: PartnerDetail, order?: Order | null) => {
     setPrintInvoicePartner(partner);
@@ -1771,6 +1819,87 @@ export default function OrdersPage() {
               </Stack>
             );
           })()}
+        </Modal>
+
+        {/* 관리자 PIN 인증 (0056) 잠금 팝업 모달 */}
+        <Modal
+          opened={mounted && pinAuthModalOpened}
+          onClose={() => {
+            closePinAuthModal();
+            setPendingAction(null);
+          }}
+          title={<Text fw={800} size="md" c="dark">관리자 PIN 인증 (0056)</Text>}
+          centered
+          radius="md"
+          size={300}
+          styles={{
+            content: { maxWidth: '300px', width: '100%', backgroundColor: '#ffffff', color: '#0f172a', borderRadius: '12px' },
+            header: { backgroundColor: '#ffffff', borderBottom: '1px solid #f1f5f9' }
+          }}
+        >
+          <form onSubmit={handlePinAuthSubmit} autoComplete="off">
+            <Stack gap="sm" pt="xs">
+              <Text size="xs" c="dimmed" ta="center" fw={600}>
+                {pendingAction?.type === 'DELETE_ORDER'
+                  ? '수주 건 삭제를 위해 관리자 PIN(0056)을 입력하세요.'
+                  : '완료 공정 상태 정정을 위해 관리자 PIN(0056)을 입력하세요.'}
+              </Text>
+
+              {pinError && (
+                <Alert icon={<IconAlertCircle size={15} />} color="red" variant="light" radius="md" p="xs">
+                  <Text size="xs">{pinError}</Text>
+                </Alert>
+              )}
+
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  autoComplete="off"
+                  value={pinInput}
+                  onChange={(e) => {
+                    setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4));
+                    setPinError(null);
+                  }}
+                  placeholder="••••"
+                  autoFocus
+                  style={{
+                    width: '100%',
+                    height: '48px',
+                    fontSize: '22px',
+                    fontWeight: 900,
+                    letterSpacing: '8px',
+                    textAlign: 'center',
+                    borderRadius: '10px',
+                    border: pinError ? '2px solid #ef4444' : '2px solid #3b82f6',
+                    backgroundColor: '#ffffff',
+                    color: '#0f172a',
+                    outline: 'none',
+                    boxShadow: '0 3px 10px rgba(59, 130, 246, 0.15)'
+                  }}
+                />
+              </div>
+
+              <Group justify="space-between" mt="xs">
+                <Button
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
+                  onClick={() => {
+                    closePinAuthModal();
+                    setPendingAction(null);
+                  }}
+                >
+                  취소
+                </Button>
+                <Button type="submit" color="blue" size="sm" radius="md">
+                  확인
+                </Button>
+              </Group>
+            </Stack>
+          </form>
         </Modal>
       </Stack>
 

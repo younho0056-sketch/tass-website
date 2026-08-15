@@ -262,11 +262,6 @@ const OrderCard = memo(function OrderCard({
                 <IconPencil size={16} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label="거래명세표/송장 인쇄">
-              <ActionIcon color="indigo.6" variant="subtle" size="sm" onClick={() => onPrintSingleOrderInvoice(order)}>
-                <IconPrinter size={16} />
-              </ActionIcon>
-            </Tooltip>
             <Tooltip label="삭제">
               <ActionIcon color="red" variant="subtle" size="sm" onClick={() => onDelete(order.id)}>
                 <IconTrash size={16} />

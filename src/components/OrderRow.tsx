@@ -268,11 +268,6 @@ export const OrderRow = memo(function OrderRow({
               <IconPencil size={17} />
             </ActionIcon>
           </Tooltip>
-          <Tooltip label="선택 품목 거래명세표/송장 인쇄">
-            <ActionIcon color="indigo.6" variant="subtle" size="sm" onClick={() => onPrintSingleOrderInvoice(order)}>
-              <IconPrinter size={17} />
-            </ActionIcon>
-          </Tooltip>
           <Tooltip label="삭제">
             <ActionIcon color="red" variant="subtle" size="sm" onClick={() => onDelete(order.id)}>
               <IconTrash size={17} />

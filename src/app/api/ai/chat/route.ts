@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Groq } from 'groq-sdk';
 import OpenAI from 'openai';
 import { prisma } from '@/lib/prisma';
 
@@ -88,8 +89,8 @@ export async function POST(request: Request) {
       };
     });
 
-    // 2. Strict System Prompt with DB Snapshot Context
-    const systemPrompt = `당신은 TASS 제조 공장의 지능형 전담 AI 비서입니다.
+    // 2. System Prompt with DB Snapshot Context
+    const systemPrompt = `당신은 TASS 제조 공장의 수석 AI 비서입니다.
 오늘 날짜: ${todayStr} (당월: ${currentYearMonth})
 
 [TASS 실시간 사내 DB 최신 데이터 스냅샷]
@@ -123,22 +124,46 @@ ${products
   .join('\n')}
 
 [답변 및 대화 원칙]
-1. 사내 DB 관련 질문(담당자, 연락처, 공정 현황, 납기일, 특정 품목 등)에는 주입된 최신 사내 DB 데이터를 바탕으로 정답만 군더더기 없이 정확하게 답변하세요.
-2. 날씨, 일반 상식, 기계/용접/산업안전 기술, 수식 계산, 일상 대화 등 사내 DB 외의 모든 질문에도 유능하고 똑똑하게 친절히 답변하세요.
-3. 불필요한 메타 서론, 인사말 템플릿(예: '조회 결과입니다', '질문하신 내용:')을 쓰지 말고 대화 맥락에 맞게 자연스럽게 대답하세요.
+1. 사내 데이터 질문(담당자, 연락처, 공정 현황, 납기일, 특정 품목 등)에는 주입된 DB 데이터를 기반으로 정답만 군더더기 없이 정확히 답변하세요.
+2. 날씨, 일반 상식, 기계/용접/안전 기술, 수식 계산, 일상 대화 등 사내 DB 외의 모든 질문에도 친절하고 유능하게 직접 답변하세요.
+3. 기계적인 고정 Fallback 문구나 템플릿 서론(예: '조회 결과입니다', '질문하신 내용:')은 완전히 제거하세요.
 `;
 
-    // 3. Primary AI Model: OpenAI SDK (gpt-4o-mini)
-    const openAiApiKey =
-      process.env.OPENAI_API_KEY ||
-      process.env.NEXT_PUBLIC_OPENAI_API_KEY ||
-      '';
+    // 3. Primary Engine: Groq SDK (llama-3.3-70b-versatile)
+    const groqApiKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY || '';
+    if (groqApiKey && groqApiKey !== 'your-groq-api-key') {
+      try {
+        const groq = new Groq({ apiKey: groqApiKey });
+        const groqMessages = [
+          { role: 'system', content: systemPrompt },
+          ...messages.map((m: any) => ({
+            role: m.role === 'model' ? 'assistant' : m.role,
+            content: m.content,
+          })),
+        ];
 
-    if (openAiApiKey) {
+        const completion = await groq.chat.completions.create({
+          model: 'llama-3.3-70b-versatile',
+          messages: groqMessages as any,
+          temperature: 0.3,
+          max_tokens: 1200,
+        });
+
+        const replyText = completion.choices[0]?.message?.content?.trim();
+        if (replyText) {
+          return createStreamResponse(replyText);
+        }
+      } catch (groqErr: any) {
+        console.error('Groq SDK Execution Error:', groqErr.message || groqErr);
+      }
+    }
+
+    // 4. Secondary Engine: OpenAI SDK (gpt-4o-mini)
+    const openAiApiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '';
+    if (openAiApiKey && openAiApiKey !== 'your-openai-api-key') {
       try {
         const openai = new OpenAI({ apiKey: openAiApiKey });
-
-        const formattedMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+        const openAiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
           { role: 'system', content: systemPrompt },
           ...messages.map((m: any) => ({
             role: (m.role === 'model' || m.role === 'assistant' ? 'assistant' : 'user') as 'assistant' | 'user',
@@ -148,7 +173,7 @@ ${products
 
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
-          messages: formattedMessages,
+          messages: openAiMessages,
           temperature: 0.3,
           max_tokens: 1200,
         });
@@ -162,14 +187,9 @@ ${products
       }
     }
 
-    // 4. Fallback: Gemini REST API if Gemini key is available
-    const geminiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
-      '';
-
-    if (geminiKey) {
+    // 5. Tertiary Engine: Gemini REST API
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+    if (geminiKey && geminiKey !== 'your-gemini-api-key') {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
         const historyText = messages
@@ -196,7 +216,7 @@ ${products
       }
     }
 
-    // 5. Smart DB Direct Search Fallback (Guarantees zero downtime)
+    // 6. DB Hybrid Engine Fallback
     const hybridReply = generateDbHybridReply(
       lastUserMessage,
       partners,
@@ -208,7 +228,7 @@ ${products
     return createStreamResponse(hybridReply);
   } catch (error: any) {
     console.error('AI Chat API error:', error);
-    return createStreamResponse('TASS 스마트 현장 관리 시스템입니다. 궁금하신 거래처나 수주/공정 현황을 말씀해 주세요!');
+    return createStreamResponse('TASS 수석 AI 비서입니다. 궁금하신 거래처나 수주/공정 현황, 기술 문의를 말씀해 주세요!');
   }
 }
 
@@ -247,7 +267,6 @@ function generateDbHybridReply(
 ): string {
   const q = query.trim().toLowerCase();
 
-  // 1. Partner DB Lookup (Matches exact or partial partner/manager name, e.g. "노만", "아크")
   const matchedPartner = partners.find(
     (p) =>
       q.includes(p.name.toLowerCase()) ||
@@ -280,7 +299,6 @@ function generateDbHybridReply(
     }
   }
 
-  // 2. Order / Delivery Lookup
   if (q.includes('납기') || q.includes('임박') || q.includes('d-day') || q.includes('급한')) {
     const urgent = orders.filter((o) => o.status === '납기임박' || (o.dueDate && o.status !== '완료'));
     if (urgent.length === 0) {
@@ -308,15 +326,13 @@ function generateDbHybridReply(
     return `납품 완료 현황 (총 ${completed.length}건):\n${list}`;
   }
 
-  // 3. Product / Machinery Lookup
   const matchedProduct = products.find((p) => q.includes(p.name.toLowerCase()));
   if (matchedProduct) {
     return `**${matchedProduct.name}** (${matchedProduct.category}): ${matchedProduct.desc || 'TASS 정품 스마트 산업 설비입니다.'}`;
   }
 
-  // 4. Greetings & Weather
   if (q.includes('안녕') || q.includes('반가') || q.includes('누구')) {
-    return `안녕하세요! TASS 스마트 현장 AI 비서입니다. 🤖 사내 거래처 연락처, 수주/공정 현황, 장비 지식 등 편하게 말씀해 주세요!`;
+    return `안녕하세요! TASS 스마트 현장 수석 AI 비서입니다. 🤖 사내 거래처 연락처, 수주/공정 현황, 장비 지식 등 편하게 말씀해 주세요!`;
   }
 
   return `요청하신 **"${query}"**에 대해 TASS 사내 DB(거래처 ${partners.length}개사, 수주/공정 ${orders.length}건)를 바탕으로 정보를 안내합니다. 특정 거래처명이나 수주 품목을 말씀해 주시면 즉시 상세 정보를 찾아드립니다.`;

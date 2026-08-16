@@ -143,41 +143,56 @@ ${products
       );
     }
 
-    // 3. Direct GoogleGenerativeAI Execution
-    try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
-        systemInstruction: systemPrompt,
-      });
+    // Supported model identifiers prioritized by compatibility
+    const candidateModels = [
+      'gemini-1.5-flash-latest',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-2.5-flash',
+      'gemini-1.5-pro-latest',
+      'gemini-1.5-pro',
+    ];
 
-      const formattedHistory = conversationHistory.map((m: any) => ({
-        role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      }));
+    let lastErrorMessage = '';
 
-      const chat = model.startChat({
-        history: formattedHistory,
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 1200,
-        },
-      });
+    // 3. Try GoogleGenerativeAI SDK across candidate models
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const formattedHistory = conversationHistory.map((m: any) => ({
+      role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
 
-      const result = await chat.sendMessage(lastUserMessage);
-      const replyText = result.response.text().trim();
-
-      if (replyText) {
-        return createStreamResponse(replyText);
-      } else {
-        return createStreamResponse('⚠️ Gemini API로부터 빈 응답이 반환되었습니다.');
-      }
-    } catch (sdkErr: any) {
-      console.error('Gemini SDK Execution Error:', sdkErr);
-
-      // Try REST API fallback before throwing error
+    for (const modelName of candidateModels) {
       try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: systemPrompt,
+        });
+
+        const chat = model.startChat({
+          history: formattedHistory,
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 1200,
+          },
+        });
+
+        const result = await chat.sendMessage(lastUserMessage);
+        const replyText = result.response.text().trim();
+
+        if (replyText) {
+          return createStreamResponse(replyText);
+        }
+      } catch (sdkErr: any) {
+        lastErrorMessage = sdkErr.message || String(sdkErr);
+        console.warn(`Gemini SDK model [${modelName}] error:`, lastErrorMessage);
+      }
+    }
+
+    // 4. Try REST API fallback across candidate models
+    for (const modelName of candidateModels) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
         const geminiContents = [
           ...conversationHistory.map((m: any) => ({
             role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
@@ -203,20 +218,19 @@ ${products
           if (replyText) {
             return createStreamResponse(replyText);
           }
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          lastErrorMessage = errData.error?.message || response.statusText;
         }
-
-        const errorJson = await response.json().catch(() => ({}));
-        const restErrorMsg = errorJson.error?.message || response.statusText;
-        return createStreamResponse(
-          `⚠️ Gemini API 호출 실패 (${response.status}): ${restErrorMsg}`
-        );
       } catch (restErr: any) {
-        const errorDetails = sdkErr.message || String(sdkErr);
-        return createStreamResponse(
-          `⚠️ Gemini API 런타임 오류: ${errorDetails}`
-        );
+        lastErrorMessage = restErr.message || String(restErr);
+        console.warn(`Gemini REST model [${modelName}] error:`, lastErrorMessage);
       }
     }
+
+    return createStreamResponse(
+      `⚠️ Gemini API 호출 오류: ${lastErrorMessage || '호환 가능한 모델을 찾을 수 없습니다.'}`
+    );
   } catch (error: any) {
     console.error('AI Chat API error:', error);
     return createStreamResponse(`⚠️ 서버 API 오류: ${error.message || String(error)}`);

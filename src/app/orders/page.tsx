@@ -409,14 +409,20 @@ export default function OrdersPage() {
       };
     });
 
+    const cleanOrderDate = orderDate ? String(orderDate).trim() : new Date().toISOString().split('T')[0];
+    const cleanDueDate = dueDate ? String(dueDate).trim() : null;
+
     const bodyData = {
       projectNo,
       drawingUrl,
       partnerName,
       itemName,
       quantity,
-      orderDate,
-      dueDate,
+      orderDate: cleanOrderDate,
+      order_date: cleanOrderDate,
+      dueDate: cleanDueDate,
+      due_date: cleanDueDate,
+      delivery_date: cleanDueDate,
       memo,
       processSteps
     };
@@ -433,15 +439,17 @@ export default function OrdersPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || '저장 중 오류가 발생했습니다.');
+        console.error('Order save failed:', data);
+        alert(`[수주 저장 실패]\n${data.error || '저장 중 오류가 발생했습니다.'}${data.details ? '\n상세 사유: ' + data.details : ''}`);
         return;
       }
 
       close();
       resetForm();
       if (mutateOrders) mutateOrders();
-    } catch (err) {
-      alert('요청 처리 중 오류가 발생했습니다.');
+    } catch (err: any) {
+      console.error('Order request error:', err);
+      alert(`[요청 오류] 서버 연결 실패: ${err?.message || String(err)}`);
     }
   }, [canEdit, activeStepNames, editingOrder, projectNo, drawingUrl, partnerName, itemName, quantity, orderDate, dueDate, memo, close, resetForm, mutateOrders]);
 

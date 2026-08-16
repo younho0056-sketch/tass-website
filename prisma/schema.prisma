@@ -54,6 +54,8 @@ model Order {
   status      String   @default("진행중") // '진행중', '납기임박', '완료'
   processSteps String  // JSON String: [{"name":"설계","status":"완료","active":true}, ...]
   memo        String?
+  projectNo   String?
+  drawingUrl  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

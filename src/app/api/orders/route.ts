@@ -8,26 +8,45 @@ interface ProcessStep {
   date?: string | null;
 }
 
+function sanitizeDateString(dateVal: any): string | null {
+  if (dateVal === null || dateVal === undefined) return null;
+  const str = String(dateVal).trim();
+  if (!str) return null;
+
+  const match = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (match) {
+    const year = match[1];
+    const month = match[2].padStart(2, '0');
+    const day = match[3].padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split('T')[0];
+  }
+
+  return str;
+}
+
 export async function GET() {
   try {
     const orders = await prisma.order.findMany({
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
 
-    // Compute metrics
     const totalCount = orders.length;
     let inProgressCount = 0;
     let nearingDueCount = 0;
     let completedCount = 0;
 
-    // Create map for retroactive PRJ-001... assignment by chronological ID order
     const sortedOrders = [...orders].sort((a, b) => a.id - b.id);
     const projectNoMap = new Map<number, string>();
     sortedOrders.forEach((o, index) => {
       projectNoMap.set(o.id, `PRJ-${String(index + 1).padStart(3, '0')}`);
     });
 
-    const parsedOrders = orders.map(order => {
+    const parsedOrders = orders.map((order) => {
       let rawSteps: any[] = [];
       try {
         rawSteps = JSON.parse(order.processSteps || '[]');
@@ -36,22 +55,21 @@ export async function GET() {
       }
 
       const steps: ProcessStep[] = Array.isArray(rawSteps)
-        ? rawSteps.map(s => ({
+        ? rawSteps.map((s) => ({
             name: s.name || '',
             status: s.status || '대기',
-            active: s.active !== undefined ? s.active : true,
-            date: s.date || null
+            active: s.active !== undefined ? Boolean(s.active) : true,
+            date: sanitizeDateString(s.date),
           }))
         : [];
 
-      // Calculate progress percentage
-      const activeSteps = steps.filter(s => s.active);
-      const completedSteps = activeSteps.filter(s => s.status === '완료');
-      const progressPercent = activeSteps.length > 0 
-        ? Math.round((completedSteps.length / activeSteps.length) * 100)
-        : 0;
+      const activeSteps = steps.filter((s) => s.active);
+      const completedSteps = activeSteps.filter((s) => s.status === '완료');
+      const progressPercent =
+        activeSteps.length > 0
+          ? Math.round((completedSteps.length / activeSteps.length) * 100)
+          : 0;
 
-      // Status check
       let currentStatus = order.status;
       if (activeSteps.length > 0 && completedSteps.length === activeSteps.length) {
         currentStatus = '완료';
@@ -68,15 +86,18 @@ export async function GET() {
       else if (currentStatus === '납기임박') nearingDueCount++;
       else inProgressCount++;
 
-      const assignedProjectNo = (order as any).projectNo || projectNoMap.get(order.id) || `PRJ-${String(order.id).padStart(3, '0')}`;
+      const assignedProjectNo =
+        order.projectNo || projectNoMap.get(order.id) || `PRJ-${String(order.id).padStart(3, '0')}`;
 
       return {
         ...order,
+        orderDate: sanitizeDateString(order.orderDate),
+        dueDate: sanitizeDateString(order.dueDate),
         projectNo: assignedProjectNo,
-        drawingUrl: (order as any).drawingUrl || null,
+        drawingUrl: order.drawingUrl || null,
         status: currentStatus,
         steps,
-        progressPercent
+        progressPercent,
       };
     });
 
@@ -86,12 +107,15 @@ export async function GET() {
         totalCount,
         inProgressCount,
         nearingDueCount,
-        completedCount
-      }
+        completedCount,
+      },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Fetch orders error:', error);
-    return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch orders', details: error.message || String(error) },
+      { status: 500 }
+    );
   }
 }
 
@@ -111,42 +135,46 @@ export async function POST(request: Request) {
       { name: '가공', status: '대기', active: true },
       { name: '용접', status: '대기', active: true },
       { name: '도장', status: '대기', active: true },
-      { name: '조립/납품', status: '대기', active: true }
+      { name: '조립/납품', status: '대기', active: true },
     ];
 
-    const activeSteps = steps.filter(s => s.active);
-    const completedSteps = activeSteps.filter(s => s.status === '완료');
+    const activeSteps = steps.filter((s) => s.active);
+    const completedSteps = activeSteps.filter((s) => s.status === '완료');
     let initialStatus = '진행중';
     if (activeSteps.length > 0 && completedSteps.length === activeSteps.length) {
       initialStatus = '완료';
     }
 
+    const rawOrderDate = data.orderDate !== undefined ? data.orderDate : data.order_date;
+    const rawDueDate = data.dueDate !== undefined ? data.dueDate : (data.due_date !== undefined ? data.due_date : data.delivery_date);
+
+    const sanitizedOrderDate = sanitizeDateString(rawOrderDate) || new Date().toISOString().split('T')[0];
+    const sanitizedDueDate = sanitizeDateString(rawDueDate);
+
     const orderData: any = {
-      partnerName: data.partnerName.trim(),
+      partnerName: String(data.partnerName).trim(),
       partnerId: data.partnerId ? parseInt(data.partnerId) : null,
-      itemName: data.itemName.trim(),
-      quantity: data.quantity ? parseInt(data.quantity) : 1,
-      orderDate: data.orderDate || new Date().toISOString().split('T')[0],
-      dueDate: data.dueDate || null,
+      itemName: String(data.itemName).trim(),
+      quantity: data.quantity ? (parseInt(data.quantity) || 1) : 1,
+      orderDate: sanitizedOrderDate,
+      dueDate: sanitizedDueDate,
       status: initialStatus,
       processSteps: JSON.stringify(steps),
-      memo: data.memo || null,
+      memo: data.memo ? String(data.memo).trim() : null,
+      projectNo: data.projectNo ? String(data.projectNo).trim() : null,
+      drawingUrl: data.drawingUrl ? String(data.drawingUrl).trim() : null,
     };
 
-    if (data.projectNo && data.projectNo.trim()) {
-      orderData.projectNo = data.projectNo.trim();
-    }
-    if (data.drawingUrl && data.drawingUrl.trim()) {
-      orderData.drawingUrl = data.drawingUrl.trim();
-    }
-
     const order = await prisma.order.create({
-      data: orderData
+      data: orderData,
     });
 
     return NextResponse.json(order, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create order error:', error);
-    return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to create order', details: error.message || String(error) },
+      { status: 500 }
+    );
   }
 }

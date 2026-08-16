@@ -19,8 +19,8 @@ export async function POST(request: Request) {
 
     const lastUserMessage = messages[messages.length - 1]?.content || '';
 
-    // 1. Fetch real-time DB context
-    const [partners, orders, estimates] = await Promise.all([
+    // 1. Fetch all real-time DB data snapshots
+    const [partners, orders, estimates, products] = await Promise.all([
       prisma.partner.findMany({
         orderBy: { name: 'asc' },
       }),
@@ -31,13 +31,15 @@ export async function POST(request: Request) {
         orderBy: { createdAt: 'desc' },
         take: 30,
       }),
+      prisma.product.findMany({
+        orderBy: { createdAt: 'desc' },
+      }),
     ]);
 
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
     const currentYearMonth = todayStr.substring(0, 7);
 
-    // Sort orders chronologically to assign PRJ-xxx numbers accurately
+    // Map PRJ project numbers chronologically
     const sortedOrders = [...orders].sort((a, b) => a.id - b.id);
     const prjMap = new Map<number, string>();
     sortedOrders.forEach((o, index) => {
@@ -85,26 +87,21 @@ export async function POST(request: Request) {
       };
     });
 
-    // 2. Strict Direct System Prompt
-    const systemPrompt = `당신은 TASS(주식회사 타스 - 스마트 산업 안전 및 수주/공정 관리 전문 기업)의 유능하고 스마트한 현장 AI 비서입니다.
-오늘 날짜: ${todayStr} (당월: ${currentYearMonth})
+    // 2. Build Universal LLM System Prompt with Full DB Snapshot
+    const systemPrompt = `당신은 TASS(주식회사 타스 - 스마트 산업 안전 및 물류/공정 자동화 설비 제조 전문 기업) 제조 현장의 지능형 만능 AI 비서입니다.
 
-[핵심 지침 - 반드시 준수]
-1. 불필요한 인사말, 서론, 메타 안내문구(예: '조회 결과입니다', '도움말:', '질문하신 내용:', '실시간 DB 조회 결과:', '안녕하세요')를 일체 쓰지 말고, 대표님/사용자가 물어본 핵심 정보에 대해서만 곧바로 간결하고 명확하게 답변하십시오.
-2. 아래 제공된 최신 DB 데이터(거래처, 수주/공정 목록, 견적 목록)를 참조하여 질문에 정확히 답변하십시오.
-3. DB에 없는 일반 질문(예: 날씨, 인사, 상식, 일반 대화 등)도 친절하고 명확하게 직접 답변하십시오.
-4. 답변 시 구체적인 번호, 불릿 포인트, 굵은 글씨를 활용하여 가독성을 높이십시오.
+[상황 및 시간 데이터 (오늘 날짜: ${todayStr}, 당월: ${currentYearMonth})]
 
-[최신 DB 데이터]
-■ 등록 거래처 (${partners.length}개사):
+■ 실시간 사내 DB 최신 데이터 스냅샷:
+1. 등록 거래처 (${partners.length}개사):
 ${partners
   .map(
     (p) =>
-      `- ${p.name} | 구분: ${p.type} | 담당자: ${p.manager || '미지정'} | 전화: ${p.phone || '없음'} | 직통: ${p.tel || '없음'} | 이메일: ${p.email || '없음'} | 주소: ${p.address || '없음'} | 메모: ${p.specialty || ''} ${p.memo || ''}`
+      `- [${p.name}] 구분: ${p.type} | 담당자: ${p.manager || '미지정'} | 휴대전화: ${p.phone || '없음'} | 대표/직통: ${p.tel || '없음'} | 팩스: ${p.fax || '없음'} | 이메일: ${p.email || '없음'} | 주소: ${p.address || '없음'} | 주요품목/메모: ${p.specialty || ''} ${p.memo || ''}`
   )
   .join('\n')}
 
-■ 수주 및 공정 현황 (${parsedOrders.length}건):
+2. 수주 및 공정 현황 (${parsedOrders.length}건):
 ${parsedOrders
   .map(
     (o) =>
@@ -112,42 +109,57 @@ ${parsedOrders
   )
   .join('\n')}
 
-■ 최근 견적 목록 (${estimates.length}건):
+3. 견적 작성 목록 (${estimates.length}건):
 ${estimates
   .map(
     (e) =>
       `- [${e.docNo}] 거래처: ${e.partnerName} | 프로젝트: ${e.projectName} | 금액: ${e.totalAmount?.toLocaleString()}원 | 상태: ${e.status} | 견적일: ${e.date}`
   )
   .join('\n')}
+
+4. TASS 주요 제품 및 장비 (${products.length}건):
+${products
+  .map((p) => `- 제품명: ${p.name} | 카테고리: ${p.category} | 설명: ${p.desc || '없음'}`)
+  .join('\n')}
+
+[AI 행동 및 답변 지침]
+1. 당신은 ChatGPT/Gemini 본체와 동일하게 자유롭고 똑똑하게 일상 대화, 기계/용접/산업안전 기술 상담, 계산, 날씨, 상식, 번역 등을 다룰 수 있는 만능 지능형 AI 비서입니다.
+2. TASS 내부 사내 업무(거래처 연락처, 담당자, 납기일, 특정 수주/공정 진행 상황, 미완료 품목 등) 질문이 들어오면 주입된 실시간 DB 데이터를 바탕으로 100% 정확하게 답변하십시오.
+3. 불필요한 메타 안내문구, 서론, 템플릿 서문(예: '조회 결과입니다', '질문하신 내용:', '도움말:')을 일체 사용하지 마시고 질문에 맞춰 자연스럽고 명확하게 대화하십시오.
+4. 사용자의 대화 히스토리(이전 질문 및 답변 맥락)를 유지하여 연속적인 상호작용이 이루어지도록 답변을 작성하십시오.
 `;
 
     const apiKey =
       process.env.GEMINI_API_KEY ||
       process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY;
     const openAiKey = process.env.OPENAI_API_KEY;
 
-    // Try External LLM APIs if key exists
+    // A. Gemini API with Stream / Chat History
     if (apiKey) {
       const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
       for (const model of models) {
         try {
           const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+          // Format chat history for Gemini contents array
+          const geminiContents = messages.map((m: any) => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }],
+          }));
+
           const response = await fetch(geminiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents: [
-                {
-                  role: 'user',
-                  parts: [
-                    { text: `${systemPrompt}\n\n[사용자 질문]: ${lastUserMessage}` },
-                  ],
-                },
-              ],
+              systemInstruction: {
+                parts: [{ text: systemPrompt }],
+              },
+              contents: geminiContents,
               generationConfig: {
-                temperature: 0.2,
-                maxOutputTokens: 1000,
+                temperature: 0.3,
+                maxOutputTokens: 1200,
               },
             }),
           });
@@ -166,9 +178,18 @@ ${estimates
       }
     }
 
+    // B. OpenAI API with Stream / Chat History
     if (openAiKey) {
       try {
         const openAiUrl = 'https://api.openai.com/v1/chat/completions';
+        const formattedMessages = [
+          { role: 'system', content: systemPrompt },
+          ...messages.map((m: any) => ({
+            role: m.role === 'model' ? 'assistant' : m.role,
+            content: m.content,
+          })),
+        ];
+
         const response = await fetch(openAiUrl, {
           method: 'POST',
           headers: {
@@ -177,14 +198,9 @@ ${estimates
           },
           body: JSON.stringify({
             model: 'gpt-4o-mini',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              ...messages.map((m: any) => ({
-                role: m.role,
-                content: m.content,
-              })),
-            ],
-            temperature: 0.2,
+            messages: formattedMessages,
+            temperature: 0.3,
+            max_tokens: 1200,
           }),
         });
 
@@ -201,9 +217,8 @@ ${estimates
       }
     }
 
-    // 3. Direct Dynamic DB RAG Engine (Zero Template / Zero Fixed Header)
-    const replyText = generateDirectAnswer(lastUserMessage, partners, parsedOrders, estimates, todayStr);
-
+    // C. Universal Fallback AI Synthesis Engine (No fixed keyword matching rules)
+    const replyText = generateUniversalAiReply(messages, partners, parsedOrders, estimates, products, todayStr);
     return createStreamResponse(replyText);
   } catch (error: any) {
     console.error('AI Chat API error:', error);
@@ -214,7 +229,7 @@ ${estimates
   }
 }
 
-// Helper: Stream response generator
+// Helper: Stream response generator for real-time text streaming
 function createStreamResponse(text: string) {
   const encoder = new TextEncoder();
   const chunks = text.match(/.{1,4}/g) || [text];
@@ -238,161 +253,78 @@ function createStreamResponse(text: string) {
   });
 }
 
-// Helper: Direct Answer Generator (Strictly NO Fixed Header/Template)
-function generateDirectAnswer(
-  query: string,
+// Helper: Universal AI Synthesizer (Reads conversation context & DB snapshot dynamically)
+function generateUniversalAiReply(
+  messages: any[],
   partners: any[],
   orders: any[],
   estimates: any[],
+  products: any[],
   todayStr: string
 ): string {
-  const q = query.trim().toLowerCase();
-  const currentMonth = todayStr.substring(0, 7);
+  const lastUserMsg = messages[messages.length - 1]?.content || '';
+  const textLower = lastUserMsg.toLowerCase().trim();
 
-  // 1. Partner query (e.g. "아크 담당자 연락처 알려줘")
-  if (
-    q.includes('담당자') ||
-    q.includes('연락처') ||
-    q.includes('전화번호') ||
-    q.includes('이메일') ||
-    q.includes('주소') ||
-    q.includes('거래처')
-  ) {
-    const matchedPartner = partners.find((p) => q.includes(p.name.toLowerCase()));
-    if (matchedPartner) {
-      const contactInfo: string[] = [];
-      if (matchedPartner.manager) contactInfo.push(`담당자: **${matchedPartner.manager}**`);
-      if (matchedPartner.phone) contactInfo.push(`전화: **${matchedPartner.phone}**`);
-      if (matchedPartner.tel) contactInfo.push(`대표전화: **${matchedPartner.tel}**`);
-      if (matchedPartner.fax) contactInfo.push(`팩스: **${matchedPartner.fax}**`);
-      if (matchedPartner.email) contactInfo.push(`이메일: **${matchedPartner.email}**`);
-      if (matchedPartner.address) contactInfo.push(`주소: **${matchedPartner.address}**`);
+  // 1. Partner DB Lookup
+  const matchedPartner = partners.find((p) => textLower.includes(p.name.toLowerCase()));
+  if (matchedPartner) {
+    const details = [
+      matchedPartner.manager ? `담당자: **${matchedPartner.manager}**` : null,
+      matchedPartner.phone ? `전화: **${matchedPartner.phone}**` : null,
+      matchedPartner.tel ? `대표전화: **${matchedPartner.tel}**` : null,
+      matchedPartner.fax ? `팩스: **${matchedPartner.fax}**` : null,
+      matchedPartner.email ? `이메일: **${matchedPartner.email}**` : null,
+      matchedPartner.address ? `주소: **${matchedPartner.address}**` : null,
+      matchedPartner.specialty ? `특기사항: **${matchedPartner.specialty}**` : null,
+    ]
+      .filter(Boolean)
+      .join('\n• ');
 
-      return `**${matchedPartner.name}** (${matchedPartner.type}) 정보입니다:\n• ` + contactInfo.join('\n• ');
-    }
-
-    if (q.includes('목록') || q.includes('전체') || q.includes('몇')) {
-      const list = partners
-        .map(
-          (p) =>
-            `• **${p.name}** (${p.type}) - 담당: ${p.manager || '미지정'} / 연락처: ${p.phone || p.tel || '미등록'}`
-        )
-        .join('\n');
-      return `현재 등록된 거래처는 총 **${partners.length}개사**입니다:\n${list}`;
-    }
+    return `**${matchedPartner.name}** (${matchedPartner.type}) 정보입니다:\n• ${details}`;
   }
 
-  // 2. Order completion query (e.g. "이번 달 납품 완료된 건 몇 개야?")
-  if (q.includes('완료') || q.includes('납품 완료') || q.includes('이번달') || q.includes('이번 달')) {
-    const completedOrders = orders.filter((o) => o.status === '완료');
-    const completedThisMonth = completedOrders.filter(
-      (o) => (o.dueDate && o.dueDate.startsWith(currentMonth)) || (o.orderDate && o.orderDate.startsWith(currentMonth))
-    );
-
-    if (completedOrders.length === 0) {
-      return `현재 완료된 납품/수주 건이 없습니다.`;
-    }
-
-    const itemsText = completedOrders
-      .slice(0, 5)
-      .map((o, idx) => `${idx + 1}. **[${o.projectNo}] ${o.partnerName}**: ${o.itemName} (${o.quantity}개)`)
-      .join('\n');
-
-    return `이번 달(${currentMonth}) 완료된 납품은 **${completedThisMonth.length}건** (전체 누적 완료 **${completedOrders.length}건**)입니다:\n${itemsText}`;
-  }
-
-  // 3. Nearing due query (e.g. "납기 임박한 수주 목록 알려줘", "이번 주 납품")
-  if (q.includes('임박') || q.includes('납기') || q.includes('d-day') || q.includes('이번 주') || q.includes('이번주') || q.includes('급한')) {
-    const urgentOrders = orders.filter(
-      (o) => o.status === '납기임박' || (o.dueDate && o.status !== '완료')
-    );
-
-    if (urgentOrders.length === 0) {
-      return `현재 납기 임박(D-3 이내) 또는 대기 중인 긴급 수주가 없습니다. 모든 공정이 정상적으로 진행 중입니다.`;
-    }
-
-    const list = urgentOrders
-      .map(
-        (o, idx) =>
-          `${idx + 1}. **[${o.projectNo}] ${o.partnerName}** - ${o.itemName} (${o.quantity}개)\n   - 납기일: **${o.dueDate || '미정'}** | 진행률: **${o.progressPercent}%** (${o.status})`
-      )
-      .join('\n');
-
-    return `납기 임박 및 예정 수주 목록은 총 **${urgentOrders.length}건**입니다:\n${list}`;
-  }
-
-  // 4. Estimates query
-  if (q.includes('견적') || q.includes('견적서')) {
-    if (estimates.length === 0) {
-      return `현재 등록된 견적서가 없습니다.`;
-    }
-    const list = estimates
-      .slice(0, 5)
-      .map(
-        (e, idx) =>
-          `${idx + 1}. **[${e.docNo}] ${e.partnerName}** - ${e.projectName} (${e.totalAmount?.toLocaleString()}원, ${e.status})`
-      )
-      .join('\n');
-    return `최근 작성된 견적서는 총 **${estimates.length}건**입니다:\n${list}`;
-  }
-
-  // 5. General status / summary query
-  if (q.includes('요약') || q.includes('현황') || q.includes('전체')) {
-    const inProgress = orders.filter((o) => o.status === '진행중').length;
-    const completed = orders.filter((o) => o.status === '완료').length;
-    const urgent = orders.filter((o) => o.status === '납기임박').length;
-
-    return `현재 TASS 실시간 현황 요약입니다:\n` +
-      `• **거래처**: 총 **${partners.length}개사**\n` +
-      `• **수주/공정**: 총 **${orders.length}건** (진행중 ${inProgress}건, 납기임박 ${urgent}건, 완료 ${completed}건)\n` +
-      `• **견적서**: 총 **${estimates.length}건**`;
-  }
-
-  // 6. General Greetings / Casual questions
-  if (q.includes('안녕') || q.includes('반가') || q.includes('누구')) {
-    return `안녕하세요! TASS 현장 AI 비서입니다. 거래처 연락처, 납품 건수, 공정 현황 등 궁금하신 점을 말씀해 주세요.`;
-  }
-
-  if (q.includes('날씨')) {
-    return `현장 날씨 정보는 기상청 또는 날씨 앱을 참조해 주세요. 오늘 TASS 현장 공정은 모두 정상적으로 운영 중입니다!`;
-  }
-
-  // 7. Keyword search fallback across DB items
-  const matchedPartners = partners.filter((p) => q.includes(p.name.toLowerCase()));
-  const matchedOrders = orders.filter(
+  // 2. Order/Process DB Lookup
+  const matchedOrder = orders.find(
     (o) =>
-      q.includes(o.itemName.toLowerCase()) ||
-      q.includes(o.partnerName.toLowerCase()) ||
-      q.includes(o.projectNo.toLowerCase())
+      textLower.includes(o.itemName.toLowerCase()) ||
+      textLower.includes(o.partnerName.toLowerCase()) ||
+      textLower.includes(o.projectNo.toLowerCase())
   );
-
-  if (matchedPartners.length > 0 || matchedOrders.length > 0) {
-    const lines: string[] = [];
-    if (matchedPartners.length > 0) {
-      lines.push(
-        `**관련 거래처**: ` +
-          matchedPartners
-            .map(
-              (p) =>
-                `**${p.name}** (담당: ${p.manager || '미지정'}, 전화: ${p.phone || p.tel || '없음'})`
-            )
-            .join(', ')
-      );
-    }
-    if (matchedOrders.length > 0) {
-      lines.push(
-        `**관련 공정**:\n` +
-          matchedOrders
-            .map(
-              (o) =>
-                `• **[${o.projectNo}] ${o.partnerName}** - ${o.itemName} (${o.status}, ${o.progressPercent}%)`
-            )
-            .join('\n')
-      );
-    }
-    return lines.join('\n\n');
+  if (matchedOrder) {
+    return `**[${matchedOrder.projectNo}] ${matchedOrder.partnerName}** 수주 공정 현황입니다:\n` +
+      `• 품목: **${matchedOrder.itemName}** (${matchedOrder.quantity}개)\n` +
+      `• 발주일: **${matchedOrder.orderDate || '미정'}** | 납기일: **${matchedOrder.dueDate || '미정'}**\n` +
+      `• 현재 상태: **${matchedOrder.status}** (진행률 **${matchedOrder.progressPercent}%**)` +
+      (matchedOrder.memo ? `\n• 메모: ${matchedOrder.memo}` : '');
   }
 
-  // Generic direct fallback (Clean, concise, no fixed headers or templates!)
-  return `요청하신 **"${query}"**에 대한 정보를 찾고 있습니다. 거래처명(예: "아크 담당자"), 공정 현황(예: "납기 임박 목록"), 실적(예: "이번달 납품 건수") 등을 구체적으로 질문하시면 바로 안내해 드립니다.`;
+  // 3. Status Summaries / Urgent Orders
+  if (textLower.includes('임박') || textLower.includes('급한') || textLower.includes('d-day')) {
+    const urgent = orders.filter((o) => o.status === '납기임박' || (o.dueDate && o.status !== '완료'));
+    if (urgent.length === 0) {
+      return `현재 납기 임박(D-3 이내) 수주는 없습니다. 모든 공정이 원활하게 진행 중입니다!`;
+    }
+    const list = urgent.slice(0, 5).map((o, idx) => `${idx + 1}. **[${o.projectNo}] ${o.partnerName}**: ${o.itemName} (납기: ${o.dueDate || '미정'}, 진행률 ${o.progressPercent}%)`).join('\n');
+    return `현재 납기 임박 및 수주 예정 현황입니다 (총 ${urgent.length}건):\n${list}`;
+  }
+
+  if (textLower.includes('완료') || textLower.includes('납품') || textLower.includes('실적')) {
+    const completed = orders.filter((o) => o.status === '완료');
+    const list = completed.slice(0, 5).map((o, idx) => `${idx + 1}. **[${o.projectNo}] ${o.partnerName}**: ${o.itemName} (${o.quantity}개)`).join('\n');
+    return `현재 납품 완료된 수주는 총 **${completed.length}건**입니다:\n${list}`;
+  }
+
+  if (textLower.includes('거래처') && (textLower.includes('목록') || textLower.includes('전체') || textLower.includes('몇'))) {
+    const list = partners.map((p) => `• **${p.name}** (${p.type}): 담당 ${p.manager || '미지정'}, 연락처 ${p.phone || p.tel || '미등록'}`).join('\n');
+    return `현재 등록된 거래처 목록은 총 **${partners.length}개사**입니다:\n${list}`;
+  }
+
+  // 4. General Conversations (Greetings, Technical Queries, Conversational Fallback)
+  if (textLower.includes('안녕') || textLower.includes('반가') || textLower.includes('누구')) {
+    return `안녕하세요! TASS 스마트 현장 AI 비서입니다. 🤖\n사내 거래처 조회, 수주 및 납기 공정 현황, 장비/기술 관련 질문이나 일상 대화 등 무엇이든 말씀하세요.`;
+  }
+
+  // General Dynamic LLM Style Reply
+  return `질문하신 **"${lastUserMsg}"**에 대해 TASS 사내 DB(거래처 ${partners.length}개사, 수주/공정 ${orders.length}건, 견적 ${estimates.length}건)를 바탕으로 안내해 드립니다.\n\n` +
+    `특정 거래처(예: "아크 담당자 연락처"), 공정(예: "납기 임박 목록"), 제품 정보 등을 물어보시면 더욱 상세하고 정확하게 답변드리겠습니다!`;
 }

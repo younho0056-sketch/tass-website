@@ -10,6 +10,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@mantine/core": "^9.5.0",
     "@mantine/hooks": "^9.5.0",
     "@mantine/notifications": "^9.5.1",

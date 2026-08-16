@@ -12,6 +12,7 @@ import AuthModal from '@/components/AuthModal';
 import { useAuth } from '@/context/AuthContext';
 
 import SystemMonitorWidget from '@/components/SystemMonitorWidget';
+import TassAiAssistant from '@/components/TassAiAssistant';
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const [opened, { toggle }] = useDisclosure();
@@ -244,8 +245,11 @@ export default function ClientShell({ children }: { children: React.ReactNode })
           />
         </Box>
 
-        {/* Real-time 4-Split System Monitor Widget */}
-        <SystemMonitorWidget />
+        {/* Real-time TASS AI Data Assistant & System Monitor Widgets */}
+        <Stack gap="xs" mt="auto">
+          <TassAiAssistant />
+          <SystemMonitorWidget />
+        </Stack>
       </AppShell.Navbar>
 
       <AppShell.Main>

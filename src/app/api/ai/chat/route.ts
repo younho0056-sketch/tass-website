@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
@@ -89,7 +88,7 @@ export async function POST(request: Request) {
       };
     });
 
-    // 2. Strict System Prompt with DB Snapshot Context
+    // 2. System Prompt with DB Snapshot Context
     const systemPrompt = `당신은 TASS 제조 공장의 지능형 AI 비서입니다.
 오늘 날짜: ${todayStr} (당월: ${currentYearMonth})
 
@@ -143,95 +142,40 @@ ${products
       );
     }
 
-    // Official supported models prioritized for Google AI Studio / Gemini API
-    const candidateModels = [
-      'gemini-2.5-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-    ];
+    // Build complete prompt with System Context & Message History
+    const historyContext = conversationHistory
+      .map((m: any) => `${m.role === 'user' ? '사용자' : 'AI 비서'}: ${m.content}`)
+      .join('\n');
 
-    let lastErrorMessage = '';
+    const promptWithContext = `${systemPrompt}\n\n[대화 기록]:\n${historyContext}\n\n[사용자 질문]: ${lastUserMessage}`;
 
-    // 3. Try GoogleGenerativeAI SDK
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const formattedHistory = conversationHistory.map((m: any) => ({
-      role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
+    // Official v1beta endpoint with gemini-1.5-flash model
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-    for (const modelName of candidateModels) {
-      try {
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          systemInstruction: systemPrompt,
-        });
-
-        const chat = model.startChat({
-          history: formattedHistory,
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 1200,
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: promptWithContext }],
           },
-        });
+        ],
+      }),
+    });
 
-        const result = await chat.sendMessage(lastUserMessage);
-        const replyText = result.response.text().trim();
+    const data = await response.json();
 
-        if (replyText) {
-          return createStreamResponse(replyText);
-        }
-      } catch (sdkErr: any) {
-        lastErrorMessage = sdkErr.message || String(sdkErr);
-        console.warn(`Gemini SDK model [${modelName}] error:`, lastErrorMessage);
-      }
+    if (!response.ok) {
+      const errorMsg = data.error?.message || 'Gemini API 호출 실패';
+      return createStreamResponse(`⚠️ Gemini API 오류 (${response.status}): ${errorMsg}`);
     }
 
-    // 4. Try Direct REST API across v1beta & v1 endpoints
-    const apiVersions = ['v1beta', 'v1'];
-    for (const apiVer of apiVersions) {
-      for (const modelName of candidateModels) {
-        try {
-          const geminiUrl = `https://generativelanguage.googleapis.com/${apiVer}/models/${modelName}:generateContent?key=${apiKey}`;
-          const geminiContents = [
-            ...conversationHistory.map((m: any) => ({
-              role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
-              parts: [{ text: m.content }],
-            })),
-            { role: 'user', parts: [{ text: lastUserMessage }] },
-          ];
+    const aiReply =
+      data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
+      '답변을 생성할 수 없습니다.';
 
-          const response = await fetch(geminiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-              contents: geminiContents,
-              generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
-            }),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const replyText =
-              data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-            if (replyText) {
-              return createStreamResponse(replyText);
-            }
-          } else {
-            const errData = await response.json().catch(() => ({}));
-            lastErrorMessage = errData.error?.message || response.statusText;
-          }
-        } catch (restErr: any) {
-          lastErrorMessage = restErr.message || String(restErr);
-          console.warn(`Gemini REST (${apiVer}/${modelName}) error:`, lastErrorMessage);
-        }
-      }
-    }
-
-    return createStreamResponse(
-      `⚠️ Gemini API 호출 오류: ${lastErrorMessage || 'gemini-2.5-flash 또는 gemini-1.5-flash-latest 모델 호출 실패'}`
-    );
+    return createStreamResponse(aiReply);
   } catch (error: any) {
     console.error('AI Chat API error:', error);
     return createStreamResponse(`⚠️ 서버 API 오류: ${error.message || String(error)}`);

@@ -43,7 +43,7 @@ export default function TassAiAssistant() {
       id: 'welcome',
       role: 'assistant',
       content:
-        '안녕하세요! **TASS 실시간 AI 데이터 비서**입니다. 🤖\n\nSupabase DB와 실시간 연동되어 거래처 담당자 연락처, 이번달 납품 완료 건수, 납기 임박 수주 목록 등을 바로 안내해 드립니다.',
+        '안녕하세요! **TASS 현장 AI 비서**입니다. 🤖\n\n거래처 연락처, 납품 건수, 공정 현황 등 필요하신 정보를 말씀해 주세요.',
       timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
     },
   ]);

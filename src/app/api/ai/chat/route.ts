@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { Groq } from 'groq-sdk';
-import OpenAI from 'openai';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
@@ -89,7 +88,7 @@ export async function POST(request: Request) {
       };
     });
 
-    // 2. System Prompt with DB Snapshot Context
+    // 2. Strict System Prompt with DB Snapshot Context
     const systemPrompt = `당신은 TASS 제조 공장의 수석 AI 비서입니다.
 오늘 날짜: ${todayStr} (당월: ${currentYearMonth})
 
@@ -103,6 +102,14 @@ ${partners
   .join('\n')}
 
 ■ 수주 및 공정 현황 목록 (${parsedOrders.length}건):
+${partners
+  .map(
+    (p) =>
+      `- [${p.name}] 구분: ${p.type} | 담당자: ${p.manager || '미지정'} | 휴대전화: ${p.phone || '없음'} | 대표/직통: ${p.tel || '없음'}`
+  )
+  .join('\n')}
+
+■ 수주 및 공정 목록 (${parsedOrders.length}건):
 ${parsedOrders
   .map(
     (o) =>
@@ -129,106 +136,51 @@ ${products
 3. 기계적인 고정 Fallback 문구나 템플릿 서론(예: '조회 결과입니다', '질문하신 내용:')은 완전히 제거하세요.
 `;
 
-    // 3. Primary Engine: Groq SDK (llama-3.3-70b-versatile)
-    const groqApiKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY || '';
-    if (groqApiKey && groqApiKey !== 'your-groq-api-key') {
-      try {
-        const groq = new Groq({ apiKey: groqApiKey });
-        const groqMessages = [
-          { role: 'system', content: systemPrompt },
-          ...messages.map((m: any) => ({
-            role: m.role === 'model' ? 'assistant' : m.role,
-            content: m.content,
-          })),
-        ];
+    // 3. Read GROQ_API_KEY
+    const groqApiKey =
+      process.env.GROQ_API_KEY ||
+      process.env.NEXT_PUBLIC_GROQ_API_KEY ||
+      '';
 
-        const completion = await groq.chat.completions.create({
-          model: 'llama-3.3-70b-versatile',
-          messages: groqMessages as any,
-          temperature: 0.3,
-          max_tokens: 1200,
-        });
-
-        const replyText = completion.choices[0]?.message?.content?.trim();
-        if (replyText) {
-          return createStreamResponse(replyText);
-        }
-      } catch (groqErr: any) {
-        console.error('Groq SDK Execution Error:', groqErr.message || groqErr);
-      }
+    if (!groqApiKey || groqApiKey === 'your-groq-api-key') {
+      return createStreamResponse(
+        '⚠️ GROQ_API_KEY가 설정되지 않았습니다. Vercel 또는 .env 환경 변수에 GROQ_API_KEY를 설정해 주세요.'
+      );
     }
 
-    // 4. Secondary Engine: OpenAI SDK (gpt-4o-mini)
-    const openAiApiKey = process.env.OPENAI_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY || '';
-    if (openAiApiKey && openAiApiKey !== 'your-openai-api-key') {
-      try {
-        const openai = new OpenAI({ apiKey: openAiApiKey });
-        const openAiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-          { role: 'system', content: systemPrompt },
-          ...messages.map((m: any) => ({
-            role: (m.role === 'model' || m.role === 'assistant' ? 'assistant' : 'user') as 'assistant' | 'user',
-            content: m.content,
-          })),
-        ];
+    // 4. Direct Groq SDK Execution (llama-3.3-70b-versatile)
+    try {
+      const groq = new Groq({ apiKey: groqApiKey });
+      const groqMessages = [
+        { role: 'system', content: systemPrompt },
+        ...messages.map((m: any) => ({
+          role: m.role === 'model' ? 'assistant' : m.role,
+          content: m.content,
+        })),
+      ];
 
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          messages: openAiMessages,
-          temperature: 0.3,
-          max_tokens: 1200,
-        });
+      const completion = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: groqMessages as any,
+        temperature: 0.3,
+        max_tokens: 1200,
+      });
 
-        const replyText = completion.choices[0]?.message?.content?.trim();
-        if (replyText) {
-          return createStreamResponse(replyText);
-        }
-      } catch (openAiErr: any) {
-        console.error('OpenAI SDK Execution Error:', openAiErr.message || openAiErr);
+      const replyText = completion.choices[0]?.message?.content?.trim();
+
+      if (replyText) {
+        return createStreamResponse(replyText);
+      } else {
+        return createStreamResponse('⚠️ Groq AI로부터 빈 응답이 반환되었습니다.');
       }
+    } catch (groqErr: any) {
+      console.error('Groq SDK Execution Error:', groqErr);
+      const errMsg = groqErr.message || String(groqErr);
+      return createStreamResponse(`⚠️ Groq API 호출 오류: ${errMsg}`);
     }
-
-    // 5. Tertiary Engine: Gemini REST API
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
-    if (geminiKey && geminiKey !== 'your-gemini-api-key') {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
-        const historyText = messages
-          .slice(0, -1)
-          .map((m: any) => `${m.role === 'user' ? '사용자' : 'AI 비서'}: ${m.content}`)
-          .join('\n');
-        const promptWithContext = `${systemPrompt}\n\n[대화 기록]:\n${historyText}\n\n[사용자 질문]: ${lastUserMessage}`;
-
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: promptWithContext }] }],
-          }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-          if (text) return createStreamResponse(text);
-        }
-      } catch (e) {
-        console.warn('Gemini fallback failed:', e);
-      }
-    }
-
-    // 6. DB Hybrid Engine Fallback
-    const hybridReply = generateDbHybridReply(
-      lastUserMessage,
-      partners,
-      parsedOrders,
-      estimates,
-      products,
-      todayStr
-    );
-    return createStreamResponse(hybridReply);
   } catch (error: any) {
     console.error('AI Chat API error:', error);
-    return createStreamResponse('TASS 수석 AI 비서입니다. 궁금하신 거래처나 수주/공정 현황, 기술 문의를 말씀해 주세요!');
+    return createStreamResponse(`⚠️ 서버 API 오류: ${error.message || String(error)}`);
   }
 }
 
@@ -254,86 +206,4 @@ function createStreamResponse(text: string) {
       'Cache-Control': 'no-cache, no-transform',
     },
   });
-}
-
-// Helper: Smart DB Hybrid Engine Fallback
-function generateDbHybridReply(
-  query: string,
-  partners: any[],
-  orders: any[],
-  estimates: any[],
-  products: any[],
-  todayStr: string
-): string {
-  const q = query.trim().toLowerCase();
-
-  const matchedPartner = partners.find(
-    (p) =>
-      q.includes(p.name.toLowerCase()) ||
-      p.name.toLowerCase().includes(q) ||
-      (p.manager && q.includes(p.manager.toLowerCase()))
-  );
-
-  if (matchedPartner) {
-    const details = [
-      matchedPartner.manager ? `담당자: **${matchedPartner.manager}**` : null,
-      matchedPartner.phone ? `전화: **${matchedPartner.phone}**` : null,
-      matchedPartner.tel ? `대표전화: **${matchedPartner.tel}**` : null,
-      matchedPartner.fax ? `팩스: **${matchedPartner.fax}**` : null,
-      matchedPartner.email ? `이메일: **${matchedPartner.email}**` : null,
-      matchedPartner.address ? `주소: **${matchedPartner.address}**` : null,
-    ]
-      .filter(Boolean)
-      .join(' | ');
-
-    return `**${matchedPartner.name}** (${matchedPartner.type}) 정보:\n• ${details || '연락처 미등록'}`;
-  }
-
-  if (q.includes('담당자') || q.includes('연락처') || q.includes('전화번호') || q.includes('거래처')) {
-    if (partners.length > 0) {
-      const list = partners
-        .slice(0, 10)
-        .map((p) => `• **${p.name}** (${p.type}): 담당 ${p.manager || '미지정'} (${p.phone || p.tel || '미등록'})`)
-        .join('\n');
-      return `현재 등록된 거래처 (총 ${partners.length}개사 중 상위 10개):\n${list}`;
-    }
-  }
-
-  if (q.includes('납기') || q.includes('임박') || q.includes('d-day') || q.includes('급한')) {
-    const urgent = orders.filter((o) => o.status === '납기임박' || (o.dueDate && o.status !== '완료'));
-    if (urgent.length === 0) {
-      return `현재 납기 임박(D-3 이내) 수주는 없습니다. 모든 공정이 순조롭게 진행 중입니다.`;
-    }
-    const list = urgent
-      .slice(0, 5)
-      .map(
-        (o, idx) =>
-          `${idx + 1}. **[${o.projectNo}] ${o.partnerName}**: ${o.itemName} (${o.quantity}개) - 납기: **${o.dueDate || '미정'}** (${o.progressPercent}%)`
-      )
-      .join('\n');
-    return `납기 임박 및 주요 수주 목록 (${urgent.length}건):\n${list}`;
-  }
-
-  if (q.includes('완료') || q.includes('납품') || q.includes('실적')) {
-    const completed = orders.filter((o) => o.status === '완료');
-    if (completed.length === 0) {
-      return `현재 납품 완료된 수주는 없습니다.`;
-    }
-    const list = completed
-      .slice(0, 5)
-      .map((o, idx) => `${idx + 1}. **[${o.projectNo}] ${o.partnerName}**: ${o.itemName} (${o.quantity}개)`)
-      .join('\n');
-    return `납품 완료 현황 (총 ${completed.length}건):\n${list}`;
-  }
-
-  const matchedProduct = products.find((p) => q.includes(p.name.toLowerCase()));
-  if (matchedProduct) {
-    return `**${matchedProduct.name}** (${matchedProduct.category}): ${matchedProduct.desc || 'TASS 정품 스마트 산업 설비입니다.'}`;
-  }
-
-  if (q.includes('안녕') || q.includes('반가') || q.includes('누구')) {
-    return `안녕하세요! TASS 스마트 현장 수석 AI 비서입니다. 🤖 사내 거래처 연락처, 수주/공정 현황, 장비 지식 등 편하게 말씀해 주세요!`;
-  }
-
-  return `요청하신 **"${query}"**에 대해 TASS 사내 DB(거래처 ${partners.length}개사, 수주/공정 ${orders.length}건)를 바탕으로 정보를 안내합니다. 특정 거래처명이나 수주 품목을 말씀해 주시면 즉시 상세 정보를 찾아드립니다.`;
 }

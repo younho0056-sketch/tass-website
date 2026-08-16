@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import OpenAI from 'openai';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
@@ -18,9 +19,8 @@ export async function POST(request: Request) {
     }
 
     const lastUserMessage = messages[messages.length - 1]?.content || '';
-    const conversationHistory = messages.slice(0, -1);
 
-    // 1. Fetch real-time DB snapshots
+    // 1. Fetch real-time DB snapshots from Supabase via Prisma
     const [partners, orders, estimates, products] = await Promise.all([
       prisma.partner.findMany({
         orderBy: { name: 'asc' },
@@ -88,8 +88,8 @@ export async function POST(request: Request) {
       };
     });
 
-    // 2. System Prompt with DB Snapshot Context
-    const systemPrompt = `당신은 TASS 제조 공장의 지능형 AI 비서입니다.
+    // 2. Strict System Prompt with DB Snapshot Context
+    const systemPrompt = `당신은 TASS 제조 공장의 지능형 전담 AI 비서입니다.
 오늘 날짜: ${todayStr} (당월: ${currentYearMonth})
 
 [TASS 실시간 사내 DB 최신 데이터 스냅샷]
@@ -123,37 +123,80 @@ ${products
   .join('\n')}
 
 [답변 및 대화 원칙]
-1. 사내 데이터(거래처 연락처, 담당자, 납기일, 특정 공정 상태, 미완료 품목 등) 질문에는 주입된 DB 데이터를 기반으로 정답만 군더더기 없이 정확히 답변하세요.
-2. 날씨, 일반 상식, 기계/용접/안전 기술, 수식 계산, 일상 대화 등 사내 DB 외의 모든 질문에도 유능하고 똑똑하게 직접 답변하세요.
-3. 하드코딩된 고정 매크로 문구나 템플릿 서론(예: '조회 결과입니다', '질문하신 내용:', '도움말:')은 전부 삭제하고 유연하게 대화하세요.
+1. 사내 DB 관련 질문(담당자, 연락처, 공정 현황, 납기일, 특정 품목 등)에는 주입된 최신 사내 DB 데이터를 바탕으로 정답만 군더더기 없이 정확하게 답변하세요.
+2. 날씨, 일반 상식, 기계/용접/산업안전 기술, 수식 계산, 일상 대화 등 사내 DB 외의 모든 질문에도 유능하고 똑똑하게 친절히 답변하세요.
+3. 불필요한 메타 서론, 인사말 템플릿(예: '조회 결과입니다', '질문하신 내용:')을 쓰지 말고 대화 맥락에 맞게 자연스럽게 대답하세요.
 `;
 
-    // 3. Read API Key
-    const apiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
+    // 3. Primary AI Model: OpenAI SDK (gpt-4o-mini)
+    const openAiApiKey =
+      process.env.OPENAI_API_KEY ||
+      process.env.NEXT_PUBLIC_OPENAI_API_KEY ||
       '';
 
-    // 4. Try Dynamic Gemini API Execution
-    if (apiKey) {
+    if (openAiApiKey) {
       try {
-        const aiReply = await executeDynamicGeminiCall(
-          apiKey,
-          systemPrompt,
-          conversationHistory,
-          lastUserMessage
-        );
-        if (aiReply) {
-          return createStreamResponse(aiReply);
+        const openai = new OpenAI({ apiKey: openAiApiKey });
+
+        const formattedMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+          { role: 'system', content: systemPrompt },
+          ...messages.map((m: any) => ({
+            role: (m.role === 'model' || m.role === 'assistant' ? 'assistant' : 'user') as 'assistant' | 'user',
+            content: m.content,
+          })),
+        ];
+
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: formattedMessages,
+          temperature: 0.3,
+          max_tokens: 1200,
+        });
+
+        const replyText = completion.choices[0]?.message?.content?.trim();
+        if (replyText) {
+          return createStreamResponse(replyText);
         }
-      } catch (geminiErr) {
-        console.warn('Gemini API call failed, triggering instant DB hybrid engine:', geminiErr);
+      } catch (openAiErr: any) {
+        console.error('OpenAI SDK Execution Error:', openAiErr.message || openAiErr);
       }
     }
 
-    // 5. DB Hybrid Instant Fallback (Guarantees zero error screen for user!)
+    // 4. Fallback: Gemini REST API if Gemini key is available
+    const geminiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
+      '';
+
+    if (geminiKey) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+        const historyText = messages
+          .slice(0, -1)
+          .map((m: any) => `${m.role === 'user' ? '사용자' : 'AI 비서'}: ${m.content}`)
+          .join('\n');
+        const promptWithContext = `${systemPrompt}\n\n[대화 기록]:\n${historyText}\n\n[사용자 질문]: ${lastUserMessage}`;
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptWithContext }] }],
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (text) return createStreamResponse(text);
+        }
+      } catch (e) {
+        console.warn('Gemini fallback failed:', e);
+      }
+    }
+
+    // 5. Smart DB Direct Search Fallback (Guarantees zero downtime)
     const hybridReply = generateDbHybridReply(
       lastUserMessage,
       partners,
@@ -165,83 +208,32 @@ ${products
     return createStreamResponse(hybridReply);
   } catch (error: any) {
     console.error('AI Chat API error:', error);
-    return createStreamResponse('TASS 스마트 현장 관리 시스템에 오신 것을 환영합니다! 거래처, 납기, 수주 현황 등을 말씀해 주세요.');
+    return createStreamResponse('TASS 스마트 현장 관리 시스템입니다. 궁금하신 거래처나 수주/공정 현황을 말씀해 주세요!');
   }
 }
 
-// Helper: Dynamic Gemini Model Discovery & Execution
-async function executeDynamicGeminiCall(
-  apiKey: string,
-  systemPrompt: string,
-  history: any[],
-  lastUserMessage: string
-): Promise<string | null> {
-  let selectedModel = 'gemini-1.5-flash';
+// Helper: Stream response generator for real-time text streaming
+function createStreamResponse(text: string) {
+  const encoder = new TextEncoder();
+  const chunks = text.match(/.{1,4}/g) || [text];
 
-  // Step A: Dynamic Model Discovery via GET v1beta/models
-  try {
-    const listRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
-      { signal: AbortSignal.timeout(3000) }
-    );
-    if (listRes.ok) {
-      const listData = await listRes.json();
-      const validModels = (listData.models || [])
-        .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
-        .map((m: any) => m.name.replace(/^models\//, ''));
-
-      if (validModels.length > 0) {
-        const preferred =
-          validModels.find((m: string) => m.includes('2.0-flash')) ||
-          validModels.find((m: string) => m.includes('1.5-flash')) ||
-          validModels.find((m: string) => m.includes('flash')) ||
-          validModels[0];
-        if (preferred) {
-          selectedModel = preferred;
-        }
+  const stream = new ReadableStream({
+    async start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+        await new Promise((resolve) => setTimeout(resolve, 15));
       }
-    }
-  } catch (e) {
-    console.warn('Dynamic model discovery warning, using fallback model identifier:', e);
-  }
-
-  // Step B: Build prompt & execute REST generateContent call
-  const historyText = history
-    .map((m: any) => `${m.role === 'user' ? '사용자' : 'AI 비서'}: ${m.content}`)
-    .join('\n');
-
-  const promptWithContext = `${systemPrompt}\n\n[대화 기록]:\n${historyText}\n\n[사용자 질문]: ${lastUserMessage}`;
-
-  const cleanModelName = selectedModel.startsWith('models/')
-    ? selectedModel
-    : `models/${selectedModel}`;
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/${cleanModelName}:generateContent?key=${apiKey}`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [{ text: promptWithContext }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 1200,
-      },
-    }),
-    signal: AbortSignal.timeout(8000),
+      controller.close();
+    },
   });
 
-  if (response.ok) {
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    if (text) return text;
-  }
-
-  return null;
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Transfer-Encoding': 'chunked',
+      'Cache-Control': 'no-cache, no-transform',
+    },
+  });
 }
 
 // Helper: Smart DB Hybrid Engine Fallback
@@ -327,57 +319,5 @@ function generateDbHybridReply(
     return `안녕하세요! TASS 스마트 현장 AI 비서입니다. 🤖 사내 거래처 연락처, 수주/공정 현황, 장비 지식 등 편하게 말씀해 주세요!`;
   }
 
-  if (q.includes('날씨')) {
-    return `오늘 TASS 산업 현장은 안전 수칙을 준수하며 정상 가동 중입니다! 최신 날씨는 일기예보를 참고해 주세요.`;
-  }
-
-  // 5. Keyword search across DB tables
-  const partialPartners = partners.filter(
-    (p) => p.name.toLowerCase().includes(q) || (p.manager && p.manager.toLowerCase().includes(q))
-  );
-  if (partialPartners.length > 0) {
-    const list = partialPartners
-      .map((p) => `• **${p.name}** (담당: ${p.manager || '미지정'}, Tel: ${p.phone || p.tel || '없음'})`)
-      .join('\n');
-    return `요청하신 검색 결과와 일치하는 거래처입니다:\n${list}`;
-  }
-
-  const partialOrders = orders.filter(
-    (o) =>
-      o.itemName.toLowerCase().includes(q) ||
-      o.partnerName.toLowerCase().includes(q) ||
-      o.projectNo.toLowerCase().includes(q)
-  );
-  if (partialOrders.length > 0) {
-    const list = partialOrders
-      .map((o) => `• **[${o.projectNo}] ${o.partnerName}**: ${o.itemName} (${o.status}, ${o.progressPercent}%)`)
-      .join('\n');
-    return `요청하신 검색 결과와 일치하는 공정 현황입니다:\n${list}`;
-  }
-
-  return `요청하신 **"${query}"**에 대해 TASS 사내 DB(거래처 ${partners.length}개사, 수주/공정 ${orders.length}건)를 바탕으로 정보를 안내합니다. 특정 거래처명(예: "노만", "아크")이나 수주 품목을 말씀해 주시면 즉시 상세 정보를 찾아드립니다.`;
-}
-
-// Helper: Stream response generator for real-time text streaming
-function createStreamResponse(text: string) {
-  const encoder = new TextEncoder();
-  const chunks = text.match(/.{1,4}/g) || [text];
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-        await new Promise((resolve) => setTimeout(resolve, 15));
-      }
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Transfer-Encoding': 'chunked',
-      'Cache-Control': 'no-cache, no-transform',
-    },
-  });
+  return `요청하신 **"${query}"**에 대해 TASS 사내 DB(거래처 ${partners.length}개사, 수주/공정 ${orders.length}건)를 바탕으로 정보를 안내합니다. 특정 거래처명이나 수주 품목을 말씀해 주시면 즉시 상세 정보를 찾아드립니다.`;
 }

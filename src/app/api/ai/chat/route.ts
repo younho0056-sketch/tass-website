@@ -129,6 +129,7 @@ ${products
 3. 하드코딩된 고정 매크로 문구나 템플릿 서론(예: '조회 결과입니다', '질문하신 내용:', '도움말:')은 전부 삭제하고 유연하게 대화하세요.
 `;
 
+    // Read API Key from environment variables
     const apiKey =
       process.env.GEMINI_API_KEY ||
       process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
@@ -136,124 +137,89 @@ ${products
       process.env.GOOGLE_API_KEY ||
       '';
 
-    // 3. Primary LLM: Google Generative AI SDK (gemini-1.5-flash)
-    if (apiKey) {
-      try {
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-1.5-flash',
-          systemInstruction: systemPrompt,
-        });
-
-        // Format history for SDK
-        const formattedHistory = conversationHistory.map((m: any) => ({
-          role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
-          parts: [{ text: m.content }],
-        }));
-
-        const chat = model.startChat({
-          history: formattedHistory,
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 1200,
-          },
-        });
-
-        const result = await chat.sendMessage(lastUserMessage);
-        const replyText = result.response.text().trim();
-
-        if (replyText) {
-          return createStreamResponse(replyText);
-        }
-      } catch (err: any) {
-        console.error('Gemini SDK Error, attempting REST fallback:', err.message || err);
-
-        // Fallback REST call for gemini-1.5-flash / gemini-2.0-flash
-        const models = ['gemini-1.5-flash', 'gemini-2.0-flash'];
-        for (const modelName of models) {
-          try {
-            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-            const geminiContents = [
-              ...conversationHistory.map((m: any) => ({
-                role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
-                parts: [{ text: m.content }],
-              })),
-              { role: 'user', parts: [{ text: lastUserMessage }] },
-            ];
-
-            const response = await fetch(geminiUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                contents: geminiContents,
-                generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
-              }),
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              const replyText =
-                data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-              if (replyText) {
-                return createStreamResponse(replyText);
-              }
-            }
-          } catch (restErr) {
-            console.error(`Gemini REST fallback error (${modelName}):`, restErr);
-          }
-        }
-      }
+    if (!apiKey) {
+      return createStreamResponse(
+        '⚠️ Gemini API 키가 설정되지 않았습니다. Vercel 또는 .env 환경 변수에 GEMINI_API_KEY를 설정해 주세요.'
+      );
     }
 
-    // 4. OpenAI API Fallback
-    const openAiKey = process.env.OPENAI_API_KEY;
-    if (openAiKey) {
+    // 3. Direct GoogleGenerativeAI Execution
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        systemInstruction: systemPrompt,
+      });
+
+      const formattedHistory = conversationHistory.map((m: any) => ({
+        role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      }));
+
+      const chat = model.startChat({
+        history: formattedHistory,
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 1200,
+        },
+      });
+
+      const result = await chat.sendMessage(lastUserMessage);
+      const replyText = result.response.text().trim();
+
+      if (replyText) {
+        return createStreamResponse(replyText);
+      } else {
+        return createStreamResponse('⚠️ Gemini API로부터 빈 응답이 반환되었습니다.');
+      }
+    } catch (sdkErr: any) {
+      console.error('Gemini SDK Execution Error:', sdkErr);
+
+      // Try REST API fallback before throwing error
       try {
-        const openAiUrl = 'https://api.openai.com/v1/chat/completions';
-        const formattedMessages = [
-          { role: 'system', content: systemPrompt },
-          ...messages.map((m: any) => ({
-            role: m.role === 'model' ? 'assistant' : m.role,
-            content: m.content,
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        const geminiContents = [
+          ...conversationHistory.map((m: any) => ({
+            role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
+            parts: [{ text: m.content }],
           })),
+          { role: 'user', parts: [{ text: lastUserMessage }] },
         ];
 
-        const response = await fetch(openAiUrl, {
+        const response = await fetch(geminiUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${openAiKey}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: formattedMessages,
-            temperature: 0.3,
-            max_tokens: 1200,
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents: geminiContents,
+            generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
           }),
         });
 
         if (response.ok) {
           const data = await response.json();
-          const replyText = data.choices?.[0]?.message?.content?.trim() || '';
+          const replyText =
+            data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
           if (replyText) {
             return createStreamResponse(replyText);
           }
         }
-      } catch (err) {
-        console.error('OpenAI API call error:', err);
+
+        const errorJson = await response.json().catch(() => ({}));
+        const restErrorMsg = errorJson.error?.message || response.statusText;
+        return createStreamResponse(
+          `⚠️ Gemini API 호출 실패 (${response.status}): ${restErrorMsg}`
+        );
+      } catch (restErr: any) {
+        const errorDetails = sdkErr.message || String(sdkErr);
+        return createStreamResponse(
+          `⚠️ Gemini API 런타임 오류: ${errorDetails}`
+        );
       }
     }
-
-    // 5. Smart Dynamic Engine Fallback
-    const replyText = generateSmartFallbackReply(messages, partners, parsedOrders, estimates, products);
-    return createStreamResponse(replyText);
   } catch (error: any) {
     console.error('AI Chat API error:', error);
-    return NextResponse.json(
-      { error: 'AI 응답 생성 실패', details: error.message },
-      { status: 500 }
-    );
+    return createStreamResponse(`⚠️ 서버 API 오류: ${error.message || String(error)}`);
   }
 }
 
@@ -279,50 +245,4 @@ function createStreamResponse(text: string) {
       'Cache-Control': 'no-cache, no-transform',
     },
   });
-}
-
-// Helper: Dynamic fallback answer synthesis (Zero static macro headers)
-function generateSmartFallbackReply(
-  messages: any[],
-  partners: any[],
-  orders: any[],
-  estimates: any[],
-  products: any[]
-): string {
-  const lastUserMsg = messages[messages.length - 1]?.content || '';
-  const q = lastUserMsg.toLowerCase().trim();
-
-  const matchedPartner = partners.find((p) => q.includes(p.name.toLowerCase()));
-  if (matchedPartner) {
-    const details = [
-      matchedPartner.manager ? `담당자: **${matchedPartner.manager}**` : null,
-      matchedPartner.phone ? `전화: **${matchedPartner.phone}**` : null,
-      matchedPartner.tel ? `대표전화: **${matchedPartner.tel}**` : null,
-      matchedPartner.fax ? `팩스: **${matchedPartner.fax}**` : null,
-      matchedPartner.email ? `이메일: **${matchedPartner.email}**` : null,
-      matchedPartner.address ? `주소: **${matchedPartner.address}**` : null,
-    ]
-      .filter(Boolean)
-      .join('\n• ');
-    return `**${matchedPartner.name}** (${matchedPartner.type}) 정보입니다:\n• ${details}`;
-  }
-
-  const matchedOrder = orders.find(
-    (o) =>
-      q.includes(o.itemName.toLowerCase()) ||
-      q.includes(o.partnerName.toLowerCase()) ||
-      q.includes(o.projectNo.toLowerCase())
-  );
-  if (matchedOrder) {
-    return `**[${matchedOrder.projectNo}] ${matchedOrder.partnerName}** 수주 공정 현황입니다:\n` +
-      `• 품목: **${matchedOrder.itemName}** (${matchedOrder.quantity}개)\n` +
-      `• 발주일: **${matchedOrder.orderDate || '미정'}** | 납기일: **${matchedOrder.dueDate || '미정'}**\n` +
-      `• 현재 상태: **${matchedOrder.status}** (진행률 **${matchedOrder.progressPercent}%**)`;
-  }
-
-  if (q.includes('안녕') || q.includes('반가')) {
-    return `안녕하세요! TASS 스마트 현장 AI 비서입니다. 🤖 사내 거래처 조회, 수주/공정 현황, 장비 지식 등 편하게 말씀해 주세요.`;
-  }
-
-  return `질문하신 **"${lastUserMsg}"**에 대한 정보를 사내 DB에서 확인하고 있습니다. 거래처명이나 수주 품목명을 구체적으로 입력해주시면 빠르게 안내드리겠습니다.`;
 }

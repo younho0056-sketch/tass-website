@@ -143,19 +143,17 @@ ${products
       );
     }
 
-    // Supported model identifiers prioritized by compatibility
+    // Official supported models prioritized for Google AI Studio / Gemini API
     const candidateModels = [
+      'gemini-2.5-flash',
       'gemini-1.5-flash-latest',
       'gemini-2.0-flash',
       'gemini-1.5-flash',
-      'gemini-2.5-flash',
-      'gemini-1.5-pro-latest',
-      'gemini-1.5-pro',
     ];
 
     let lastErrorMessage = '';
 
-    // 3. Try GoogleGenerativeAI SDK across candidate models
+    // 3. Try GoogleGenerativeAI SDK
     const genAI = new GoogleGenerativeAI(apiKey);
     const formattedHistory = conversationHistory.map((m: any) => ({
       role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
@@ -189,47 +187,50 @@ ${products
       }
     }
 
-    // 4. Try REST API fallback across candidate models
-    for (const modelName of candidateModels) {
-      try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-        const geminiContents = [
-          ...conversationHistory.map((m: any) => ({
-            role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
-            parts: [{ text: m.content }],
-          })),
-          { role: 'user', parts: [{ text: lastUserMessage }] },
-        ];
+    // 4. Try Direct REST API across v1beta & v1 endpoints
+    const apiVersions = ['v1beta', 'v1'];
+    for (const apiVer of apiVersions) {
+      for (const modelName of candidateModels) {
+        try {
+          const geminiUrl = `https://generativelanguage.googleapis.com/${apiVer}/models/${modelName}:generateContent?key=${apiKey}`;
+          const geminiContents = [
+            ...conversationHistory.map((m: any) => ({
+              role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
+              parts: [{ text: m.content }],
+            })),
+            { role: 'user', parts: [{ text: lastUserMessage }] },
+          ];
 
-        const response = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            contents: geminiContents,
-            generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
-          }),
-        });
+          const response = await fetch(geminiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: geminiContents,
+              generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
+            }),
+          });
 
-        if (response.ok) {
-          const data = await response.json();
-          const replyText =
-            data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-          if (replyText) {
-            return createStreamResponse(replyText);
+          if (response.ok) {
+            const data = await response.json();
+            const replyText =
+              data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+            if (replyText) {
+              return createStreamResponse(replyText);
+            }
+          } else {
+            const errData = await response.json().catch(() => ({}));
+            lastErrorMessage = errData.error?.message || response.statusText;
           }
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          lastErrorMessage = errData.error?.message || response.statusText;
+        } catch (restErr: any) {
+          lastErrorMessage = restErr.message || String(restErr);
+          console.warn(`Gemini REST (${apiVer}/${modelName}) error:`, lastErrorMessage);
         }
-      } catch (restErr: any) {
-        lastErrorMessage = restErr.message || String(restErr);
-        console.warn(`Gemini REST model [${modelName}] error:`, lastErrorMessage);
       }
     }
 
     return createStreamResponse(
-      `⚠️ Gemini API 호출 오류: ${lastErrorMessage || '호환 가능한 모델을 찾을 수 없습니다.'}`
+      `⚠️ Gemini API 호출 오류: ${lastErrorMessage || 'gemini-2.5-flash 또는 gemini-1.5-flash-latest 모델 호출 실패'}`
     );
   } catch (error: any) {
     console.error('AI Chat API error:', error);

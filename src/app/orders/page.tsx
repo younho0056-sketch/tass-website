@@ -49,6 +49,28 @@ function getDaysRemaining(dueDateStr: string | null | undefined): number | null 
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
+function formatCompactStepDate(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  const trimmed = dateStr.trim();
+  if (!trimmed) return '';
+
+  const ymdMatch = trimmed.match(/^\d{4}[-./](\d{1,2})[-./](\d{1,2})$/);
+  if (ymdMatch) {
+    const mm = ymdMatch[1].padStart(2, '0');
+    const dd = ymdMatch[2].padStart(2, '0');
+    return `${mm}.${dd}`;
+  }
+
+  const mdMatch = trimmed.match(/^(\d{1,2})[-./](\d{1,2})$/);
+  if (mdMatch) {
+    const mm = mdMatch[1].padStart(2, '0');
+    const dd = mdMatch[2].padStart(2, '0');
+    return `${mm}.${dd}`;
+  }
+
+  return trimmed;
+}
+
 const DEFAULT_STEPS = ['설계', '절단', '가공', '용접', '도장', '조립/납품'];
 const DEFAULT_DRIVE_URL = 'https://drive.google.com/drive/folders/13kS6BLYxlVlTlydnv7DGBrU3jG5kjsAZ?usp=sharing';
 
@@ -2274,13 +2296,13 @@ export default function OrdersPage() {
             <thead>
               <tr>
                 <th style={{ width: '4%', whiteSpace: 'nowrap' }}>순번</th>
-                <th style={{ width: '14%' }}>거래처명</th>
-                <th style={{ width: '11%', whiteSpace: 'nowrap' }}>프로젝트 번호</th>
-                <th style={{ width: '15%' }}>품목/수량</th>
-                <th style={{ width: '10%', whiteSpace: 'nowrap' }}>발주일</th>
-                <th style={{ width: '10%', whiteSpace: 'nowrap' }}>납기일</th>
-                <th style={{ width: '5%', whiteSpace: 'nowrap' }}>진척율</th>
-                <th style={{ width: '31%' }}>공정 단계 현황</th>
+                <th style={{ width: '11%' }}>거래처명</th>
+                <th style={{ width: '9%', whiteSpace: 'nowrap' }}>프로젝트 번호</th>
+                <th style={{ width: '14%' }}>품목/수량</th>
+                <th style={{ width: '9%', whiteSpace: 'nowrap' }}>발주일</th>
+                <th style={{ width: '9%', whiteSpace: 'nowrap' }}>납기일</th>
+                <th style={{ width: '6%', whiteSpace: 'nowrap' }}>진척율</th>
+                <th style={{ width: '38%' }}>공정 단계 현황</th>
               </tr>
             </thead>
             <tbody>
@@ -2324,34 +2346,50 @@ export default function OrdersPage() {
                       )}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}><strong>{o.progressPercent}%</strong></td>
-                    <td style={{ fontSize: '8.5pt', textAlign: 'left', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
-                      {(o.steps || []).filter(s => s.active).map((s, i, arr) => (
-                        <span key={s.name} style={{ display: 'inline-block', whiteSpace: 'nowrap' }}>
-                          {s.status === '진행중' ? (
-                            <span 
-                              className="step-highlight print-color-exact" 
-                              style={{ 
-                                backgroundColor: '#e0f2fe', 
-                                color: '#0369a1', 
-                                fontWeight: 'bold', 
-                                padding: '1px 4px', 
-                                borderRadius: '3px', 
-                                border: '1px solid #0284c7',
-                                fontSize: '8.5pt',
-                                WebkitPrintColorAdjust: 'exact',
-                                printColorAdjust: 'exact'
-                              }}
-                            >
-                              ▶ {s.name}{s.date ? `(${s.date})` : ''}
+                    <td style={{ fontSize: '8pt', textAlign: 'left', lineHeight: 1.3, padding: '2mm 2mm', boxSizing: 'border-box' }}>
+                      <div style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px 3px', maxWidth: '100%' }}>
+                        {(o.steps || []).filter(s => s.active).map((s, i, arr) => {
+                          const formattedDate = formatCompactStepDate(s.date);
+                          const dateText = formattedDate ? `(${formattedDate})` : '';
+                          return (
+                            <span key={s.name} style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap', gap: '1px' }}>
+                              {s.status === '진행중' ? (
+                                <span 
+                                  className="step-highlight print-color-exact" 
+                                  style={{ 
+                                    backgroundColor: '#e0f2fe', 
+                                    color: '#0369a1', 
+                                    fontWeight: 'bold', 
+                                    padding: '1px 3px', 
+                                    borderRadius: '3px', 
+                                    border: '1px solid #0284c7',
+                                    fontSize: '8pt',
+                                    lineHeight: '1.2',
+                                    whiteSpace: 'nowrap',
+                                    WebkitPrintColorAdjust: 'exact',
+                                    printColorAdjust: 'exact'
+                                  }}
+                                >
+                                  ▶ {s.name}{dateText}
+                                </span>
+                              ) : (
+                                <span 
+                                  style={{ 
+                                    color: s.status === '완료' ? '#059669' : '#6b7280', 
+                                    fontWeight: s.status === '완료' ? 600 : 400, 
+                                    fontSize: '8pt',
+                                    lineHeight: '1.2',
+                                    whiteSpace: 'nowrap' 
+                                  }}
+                                >
+                                  {s.name}{dateText}
+                                </span>
+                              )}
+                              {i < arr.length - 1 && <span style={{ color: '#9ca3af', margin: '0 1px', fontSize: '7.5pt' }}>➔</span>}
                             </span>
-                          ) : (
-                            <span style={{ color: s.status === '완료' ? '#059669' : '#6b7280', fontWeight: s.status === '완료' ? 600 : 400, fontSize: '8.5pt' }}>
-                              {s.name}{s.date ? `(${s.date})` : ''}
-                            </span>
-                          )}
-                          {i < arr.length - 1 && <span style={{ color: '#9ca3af', margin: '0 2px' }}>➔</span>}
-                        </span>
-                      ))}
+                          );
+                        })}
+                      </div>
                     </td>
                   </tr>
                 );

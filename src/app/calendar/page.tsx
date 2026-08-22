@@ -67,6 +67,7 @@ const COLOR_PALETTE: { label: string; value: string; bg: string; text: string; b
   { label: '보라', value: 'purple', bg: '#8b5cf6', text: '#ffffff', border: '#7c3aed' },
   { label: '청록', value: 'teal', bg: '#14b8a6', text: '#ffffff', border: '#0d9488' },
   { label: '분홍', value: 'pink', bg: '#ec4899', text: '#ffffff', border: '#db2777' },
+  { label: '회색', value: 'gray', bg: '#6b7280', text: '#ffffff', border: '#4b5563' },
 ];
 
 const CATEGORIES = [
@@ -109,7 +110,7 @@ export default function CalendarPage() {
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [includeOrders, setIncludeOrders] = useState<boolean>(true);
+  const [includeOrders, setIncludeOrders] = useState<boolean>(false);
   const [orders, setOrders] = useState<any[]>([]);
 
   // Selected date popover/modal
@@ -201,7 +202,7 @@ export default function CalendarPage() {
             startDate: dueIso,
             endDate: dueIso,
             isAllDay: true,
-            colorTag: ord.status === '납기임박' ? 'red' : 'orange',
+            colorTag: 'gray',
             category: '[발주/납기]',
             authorName: 'TASS 수주시스템',
             isOrderDueDate: true,
@@ -569,15 +570,6 @@ export default function CalendarPage() {
             </Group>
 
             <Group gap="xs" wrap="wrap">
-              <Switch
-                checked={includeOrders}
-                onChange={(e) => setIncludeOrders(e.currentTarget.checked)}
-                label="공정/납기일 자동 불러오기"
-                color="blue"
-                size="sm"
-                styles={{ label: { fontWeight: 600, fontSize: '13px', cursor: 'pointer' } }}
-              />
-
               <Button
                 variant="subtle"
                 color="gray"
@@ -624,17 +616,38 @@ export default function CalendarPage() {
               </Title>
             </Group>
 
-            <SegmentedControl
-              value={viewMode}
-              onChange={(val: any) => setViewMode(val)}
-              data={[
-                { label: '월간 뷰', value: 'month' },
-                { label: '주간 뷰', value: 'week' },
-              ]}
-              radius="md"
-              size="xs"
-              color="blue"
-            />
+            <Group gap="sm" align="center" wrap="wrap">
+              <Paper
+                px="xs"
+                py={4}
+                radius="md"
+                style={{
+                  backgroundColor: includeOrders ? '#f1f5f9' : '#fafafa',
+                  border: includeOrders ? '1px solid #cbd5e1' : '1px solid #e2e8f0',
+                }}
+              >
+                <Switch
+                  checked={includeOrders}
+                  onChange={(e) => setIncludeOrders(e.currentTarget.checked)}
+                  label="공정/납기 일정 함께 보기"
+                  color="gray"
+                  size="xs"
+                  styles={{ label: { fontWeight: 600, fontSize: '12px', cursor: 'pointer', color: '#475569' } }}
+                />
+              </Paper>
+
+              <SegmentedControl
+                value={viewMode}
+                onChange={(val: any) => setViewMode(val)}
+                data={[
+                  { label: '월간 뷰', value: 'month' },
+                  { label: '주간 뷰', value: 'week' },
+                ]}
+                radius="md"
+                size="xs"
+                color="blue"
+              />
+            </Group>
           </Group>
         </Stack>
       </Paper>
@@ -1031,7 +1044,7 @@ export default function CalendarPage() {
                       <Group justify="space-between" align="flex-start">
                         <Stack gap={4} style={{ flex: 1 }}>
                           <Group gap="xs">
-                            <Badge size="xs" color={s.isOrderDueDate ? 'red' : 'blue'} variant="light">
+                            <Badge size="xs" color={s.isOrderDueDate ? 'gray' : 'blue'} variant="light">
                               {s.category}
                             </Badge>
                             <Text fw={700} size="sm" c="gray.9">

@@ -182,15 +182,6 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
           <NavLink
             component={Link}
-            href="/calendar"
-            label="📅 일정 관리"
-            leftSection={<IconCalendar size="1.1rem" stroke={1.5} />}
-            active={pathname === '/calendar' || pathname === '/schedules'}
-            onClick={handleNavClick}
-            style={{ borderRadius: '8px', marginBottom: '4px' }}
-          />
-          <NavLink
-            component={Link}
             href="/partners"
             label="거래처 DB"
             leftSection={<IconUsers size="1.1rem" stroke={1.5} />}
@@ -249,6 +240,15 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             label="블로그 포스팅 관리"
             leftSection={<IconFileDescription size="1.1rem" stroke={1.5} />}
             active={pathname === '/blog'}
+            onClick={handleNavClick}
+            style={{ borderRadius: '8px', marginBottom: '4px' }}
+          />
+          <NavLink
+            component={Link}
+            href="/calendar"
+            label="일정 관리"
+            leftSection={<IconCalendar size="1.1rem" stroke={1.5} />}
+            active={pathname === '/calendar' || pathname === '/schedules'}
             onClick={handleNavClick}
             style={{ borderRadius: '8px' }}
           />

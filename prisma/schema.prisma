@@ -91,3 +91,20 @@ model Product {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model Schedule {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  isAllDay    Boolean  @default(false) @map("is_all_day")
+  colorTag    String   @default("blue") @map("color_tag")
+  category    String   @default("일반")
+  authorName  String?  @map("author_name")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("schedules")
+}
+

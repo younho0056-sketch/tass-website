@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { AppShell, Burger, Group, NavLink, Title, Text, Box, Badge, Button, Paper, Stack, Center } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet, IconBuildingBank, IconLock, IconLogout, IconKey, IconTools } from '@tabler/icons-react';
+import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet, IconBuildingBank, IconLock, IconLogout, IconKey, IconTools, IconCalendar } from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import BgmPlayer from '@/components/BgmPlayer';
@@ -32,7 +32,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   // Background prefetching for 0.1s instant menu switching
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const prefetchRoutes = ['/api/orders', '/api/folders', '/api/partners', '/api/estimates'];
+      const prefetchRoutes = ['/api/orders', '/api/folders', '/api/partners', '/api/estimates', '/api/schedules'];
       prefetchRoutes.forEach(url => {
         fetch(url).catch(() => {});
       });
@@ -180,6 +180,15 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             MAIN MENU
           </Text>
 
+          <NavLink
+            component={Link}
+            href="/calendar"
+            label="📅 일정 관리"
+            leftSection={<IconCalendar size="1.1rem" stroke={1.5} />}
+            active={pathname === '/calendar' || pathname === '/schedules'}
+            onClick={handleNavClick}
+            style={{ borderRadius: '8px', marginBottom: '4px' }}
+          />
           <NavLink
             component={Link}
             href="/partners"

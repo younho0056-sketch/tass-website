@@ -29,6 +29,29 @@ function sanitizeDateString(dateVal: any): string | null {
   return str;
 }
 
+function normalizeSteps(steps: ProcessStep[]): ProcessStep[] {
+  const result: ProcessStep[] = [];
+  for (const s of steps) {
+    if (s.name === '조립/납품') {
+      result.push({
+        name: '조립',
+        status: s.status,
+        active: s.active,
+        date: s.date,
+      });
+      result.push({
+        name: '납품',
+        status: s.status === '완료' ? '완료' : '대기',
+        active: s.active,
+        date: s.status === '완료' ? s.date : null,
+      });
+    } else {
+      result.push(s);
+    }
+  }
+  return result;
+}
+
 export async function GET() {
   try {
     const orders = await prisma.order.findMany({
@@ -54,7 +77,7 @@ export async function GET() {
         rawSteps = [];
       }
 
-      const steps: ProcessStep[] = Array.isArray(rawSteps)
+      const parsedSteps: ProcessStep[] = Array.isArray(rawSteps)
         ? rawSteps.map((s) => ({
             name: s.name || '',
             status: s.status || '대기',
@@ -62,6 +85,8 @@ export async function GET() {
             date: sanitizeDateString(s.date),
           }))
         : [];
+
+      const steps = normalizeSteps(parsedSteps);
 
       const activeSteps = steps.filter((s) => s.active);
       const completedSteps = activeSteps.filter((s) => s.status === '완료');
@@ -129,14 +154,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '품목명을 입력해주세요.' }, { status: 400 });
     }
 
-    const steps: ProcessStep[] = data.processSteps || [
+    const rawSteps: ProcessStep[] = data.processSteps || [
       { name: '설계', status: '대기', active: true },
       { name: '절단', status: '대기', active: true },
       { name: '가공', status: '대기', active: true },
       { name: '용접', status: '대기', active: true },
       { name: '도장', status: '대기', active: true },
-      { name: '조립/납품', status: '대기', active: true },
+      { name: '조립', status: '대기', active: true },
+      { name: '납품', status: '대기', active: true },
     ];
+    const steps = normalizeSteps(rawSteps);
 
     const activeSteps = steps.filter((s) => s.active);
     const completedSteps = activeSteps.filter((s) => s.status === '완료');

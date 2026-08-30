@@ -32,6 +32,31 @@ function sanitizeDateString(dateVal: any): string | null {
   return str;
 }
 
+function normalizeSteps(steps: ProcessStep[]): ProcessStep[] {
+  const result: ProcessStep[] = [];
+  for (const s of steps) {
+    if (s.name === '조립/납품') {
+      result.push({
+        name: '조립',
+        status: s.status,
+        active: s.active,
+        date: s.date,
+        memo: s.memo || null,
+      });
+      result.push({
+        name: '납품',
+        status: s.status === '완료' ? '완료' : '대기',
+        active: s.active,
+        date: s.status === '완료' ? s.date : null,
+        memo: null,
+      });
+    } else {
+      result.push(s);
+    }
+  }
+  return result;
+}
+
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -62,7 +87,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       rawSteps = [];
     }
 
-    const steps: ProcessStep[] = Array.isArray(rawSteps)
+    const parsedSteps: ProcessStep[] = Array.isArray(rawSteps)
       ? rawSteps.map((s) => ({
           name: s.name || '',
           status: s.status || '대기',
@@ -71,6 +96,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           memo: s.memo || null,
         }))
       : [];
+
+    const steps = normalizeSteps(parsedSteps);
+    processStepsStr = JSON.stringify(steps);
 
     const activeSteps = steps.filter((s) => s.active);
     const completedSteps = activeSteps.filter((s) => s.status === '완료');

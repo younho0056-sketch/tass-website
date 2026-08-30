@@ -71,7 +71,7 @@ function formatCompactStepDate(dateStr?: string | null): string {
   return trimmed;
 }
 
-const DEFAULT_STEPS = ['설계', '절단', '가공', '용접', '도장', '조립/납품'];
+const DEFAULT_STEPS = ['설계', '절단', '가공', '용접', '도장', '조립', '납품'];
 const DEFAULT_DRIVE_URL = 'https://drive.google.com/drive/folders/13kS6BLYxlVlTlydnv7DGBrU3jG5kjsAZ?usp=sharing';
 
 type SortField = 'partnerName' | 'orderDate' | 'dueDate' | 'progressPercent';
@@ -99,7 +99,8 @@ const DETAIL_FILTER_OPTIONS = [
     { value: '가공중', label: '⚙️ 가공중' },
     { value: '용접중', label: '🔥 용접중' },
     { value: '도장중', label: '🎨 도장중' },
-    { value: '조립/납품중', label: '📦 조립/납품중' },
+    { value: '조립중', label: '🔩 조립중' },
+    { value: '납품중', label: '🚚 납품중' },
   ]}
 ];
 
@@ -1367,7 +1368,7 @@ export default function OrdersPage() {
                       </Group>
                     </Table.Th>
                     <Table.Th 
-                      style={{ minWidth: 340, cursor: 'pointer', userSelect: 'none' }}
+                      style={{ minWidth: 400, cursor: 'pointer', userSelect: 'none' }}
                       onClick={() => handleSort('progressPercent')}
                     >
                       <Group gap={4} wrap="nowrap" align="center">

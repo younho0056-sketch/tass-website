@@ -141,7 +141,7 @@ export default function KioskPage() {
   const [stationId, setStationId] = useState<string>('1번 키오스크 (설계/공정)');
   const [incomingStream, setIncomingStream] = useState<MediaStream | null>(null);
   const [remoteShareModalOpen, setRemoteShareModalOpen] = useState<boolean>(false);
-  const [isAutoplayBlocked, setIsAutoplayBlocked] = useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -292,7 +292,7 @@ export default function KioskPage() {
               const stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
               setIncomingStream((prev) => (prev === stream ? prev : stream));
               setRemoteShareModalOpen(true);
-              setIsAutoplayBlocked(false);
+              setIsPlaying(false);
 
               if (event.track) {
                 event.track.onended = () => {
@@ -369,25 +369,40 @@ export default function KioskPage() {
     };
   }, [stationId]);
 
+  // Force play handler for touch gesture overlay
+  const handleForcePlay = async () => {
+    if (videoRef.current) {
+      if (incomingStream && videoRef.current.srcObject !== incomingStream) {
+        videoRef.current.srcObject = incomingStream;
+      }
+      try {
+        videoRef.current.muted = true;
+        await videoRef.current.play();
+        setIsPlaying(true);
+      } catch (err) {
+        console.error('Manual force play failed:', err);
+      }
+    }
+  };
+
   // Attach incoming video stream & invoke .play() with strict null guard & srcObject re-assignment guard
   useEffect(() => {
     if (!videoRef || !videoRef.current || !incomingStream) return;
     const videoEl = videoRef.current;
 
-    // Prevent duplicate srcObject reassignment on re-renders to eliminate video flickering
     if (videoEl.srcObject !== incomingStream) {
       videoEl.srcObject = incomingStream;
-      videoEl.muted = true;
-      videoEl
-        .play()
-        .then(() => {
-          setIsAutoplayBlocked(false);
-        })
-        .catch((err) => {
-          console.warn('Autoplay failed, retrying on user gesture:', err);
-          setIsAutoplayBlocked(true);
-        });
     }
+    videoEl.muted = true;
+    videoEl
+      .play()
+      .then(() => {
+        setIsPlaying(true);
+      })
+      .catch((err) => {
+        console.warn('Autoplay blocked, user gesture required:', err);
+        setIsPlaying(false);
+      });
   }, [incomingStream, remoteShareModalOpen]);
 
   const closeRemoteScreenShare = () => {
@@ -398,7 +413,7 @@ export default function KioskPage() {
     pendingKioskIceCandidatesRef.current = [];
     setIncomingStream(null);
     setRemoteShareModalOpen(false);
-    setIsAutoplayBlocked(false);
+    setIsPlaying(false);
   };
 
   /**
@@ -1238,16 +1253,9 @@ export default function KioskPage() {
               backfaceVisibility: 'hidden',
             }}
           />
-          {isAutoplayBlocked && (
+          {!isPlaying && (
             <div
-              onClick={() => {
-                if (videoRef.current) {
-                  videoRef.current
-                    .play()
-                    .then(() => setIsAutoplayBlocked(false))
-                    .catch((err) => console.error('Touch to play error:', err));
-                }
-              }}
+              onClick={handleForcePlay}
               style={{
                 position: 'absolute',
                 inset: 0,
@@ -1255,8 +1263,8 @@ export default function KioskPage() {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: 'rgba(0, 0, 0, 0.75)',
-                zIndex: 10,
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                zIndex: 50,
                 cursor: 'pointer',
               }}
             >
@@ -1264,7 +1272,7 @@ export default function KioskPage() {
                 ▶ 화면을 터치하여 시청 시작
               </Button>
               <Text size="sm" c="gray.3" mt="xs" fw={700}>
-                브라우저 자동재생 차단을 해제하려면 화면을 한 번 터치하세요.
+                브라우저 자동재생 차단을 해제하려면 화면을 탭하세요.
               </Text>
             </div>
           )}

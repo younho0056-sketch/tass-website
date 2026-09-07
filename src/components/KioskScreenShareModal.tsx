@@ -102,8 +102,9 @@ export default function KioskScreenShareModal({ opened, onClose }: KioskScreenSh
       .on('broadcast', { event: 'signal_ice' }, async (payload: any) => {
         if (payload?.payload?.targetStationId === activeStation && payload?.payload?.candidate) {
           const cand = payload.payload.candidate;
-          if (pcRef.current && pcRef.current.remoteDescription) {
-            await pcRef.current.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+          const pc = pcRef.current;
+          if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+            await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
           } else {
             pendingIceCandidatesRef.current.push(cand);
           }

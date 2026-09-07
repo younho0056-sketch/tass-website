@@ -347,8 +347,9 @@ export default function KioskPage() {
         const data = payload?.payload;
         if (data?.targetStationId === stationId && data?.candidate) {
           const cand = data.candidate;
-          if (peerConnectionRef.current && peerConnectionRef.current.remoteDescription) {
-            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+          const pc = peerConnectionRef.current;
+          if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+            await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
           } else {
             pendingKioskIceCandidatesRef.current.push(cand);
           }
@@ -368,10 +369,10 @@ export default function KioskPage() {
     };
   }, [stationId]);
 
-  // Attach incoming video stream & invoke .play() with srcObject re-assignment guard (Flicker Fix)
+  // Attach incoming video stream & invoke .play() with strict null guard & srcObject re-assignment guard
   useEffect(() => {
+    if (!videoRef || !videoRef.current || !incomingStream) return;
     const videoEl = videoRef.current;
-    if (!videoEl || !incomingStream) return;
 
     // Prevent duplicate srcObject reassignment on re-renders to eliminate video flickering
     if (videoEl.srcObject !== incomingStream) {
@@ -1192,6 +1193,7 @@ export default function KioskPage() {
         opened={remoteShareModalOpen}
         onClose={closeRemoteScreenShare}
         fullScreen
+        keepMounted
         zIndex={1000}
         styles={{
           content: { backgroundColor: '#0f172a', color: '#ffffff' },

@@ -290,7 +290,7 @@ export default function KioskPage() {
             pc.ontrack = (event) => {
               console.log('Kiosk WebRTC ontrack event received:', event);
               const stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
-              setIncomingStream(stream);
+              setIncomingStream((prev) => (prev === stream ? prev : stream));
               setRemoteShareModalOpen(true);
               setIsAutoplayBlocked(false);
 
@@ -368,12 +368,16 @@ export default function KioskPage() {
     };
   }, [stationId]);
 
-  // Attach incoming video stream & invoke .play() with muted bypass (Bug Fix 1 & 2)
+  // Attach incoming video stream & invoke .play() with srcObject re-assignment guard (Flicker Fix)
   useEffect(() => {
-    if (incomingStream && videoRef.current) {
-      videoRef.current.srcObject = incomingStream;
-      videoRef.current.muted = true;
-      videoRef.current
+    const videoEl = videoRef.current;
+    if (!videoEl || !incomingStream) return;
+
+    // Prevent duplicate srcObject reassignment on re-renders to eliminate video flickering
+    if (videoEl.srcObject !== incomingStream) {
+      videoEl.srcObject = incomingStream;
+      videoEl.muted = true;
+      videoEl
         .play()
         .then(() => {
           setIsAutoplayBlocked(false);
@@ -1216,19 +1220,7 @@ export default function KioskPage() {
       >
         <div style={{ position: 'relative', width: '100%', height: 'calc(100vh - 90px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000000' }}>
           <video
-            ref={(node) => {
-              videoRef.current = node;
-              if (node && incomingStream) {
-                node.srcObject = incomingStream;
-                node.muted = true;
-                node.play()
-                  .then(() => setIsAutoplayBlocked(false))
-                  .catch((err) => {
-                    console.warn('Autoplay blocked on video node mount:', err);
-                    setIsAutoplayBlocked(true);
-                  });
-              }
-            }}
+            ref={videoRef}
             autoPlay
             playsInline
             muted
@@ -1240,6 +1232,8 @@ export default function KioskPage() {
               objectFit: 'contain',
               borderRadius: '8px',
               pointerEvents: 'none',
+              transform: 'translateZ(0)',
+              backfaceVisibility: 'hidden',
             }}
           />
           {isAutoplayBlocked && (

@@ -92,6 +92,12 @@ const DEFAULT_STATIONS = [
   '4번 키오스크 (조립/출고)',
 ];
 
+const STUN_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+];
+
 const fetcher = async (url: string) => {
   const res = await fetch(url);
   if (!res.ok) throw new Error('API fetch error');
@@ -124,12 +130,6 @@ function getDDayInfo(dueDateStr: string | null | undefined): { dDayText: string;
   }
 }
 
-const STUN_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-];
-
 export default function KioskPage() {
   const { isAuthenticated, openAuthModal } = useAuth();
   const router = useRouter();
@@ -141,6 +141,7 @@ export default function KioskPage() {
   const [stationId, setStationId] = useState<string>('1번 키오스크 (설계/공정)');
   const [incomingStream, setIncomingStream] = useState<MediaStream | null>(null);
   const [remoteShareModalOpen, setRemoteShareModalOpen] = useState<boolean>(false);
+  const [isAutoplayBlocked, setIsAutoplayBlocked] = useState<boolean>(false);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -291,6 +292,14 @@ export default function KioskPage() {
               const stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
               setIncomingStream(stream);
               setRemoteShareModalOpen(true);
+              setIsAutoplayBlocked(false);
+
+              if (event.track) {
+                event.track.onended = () => {
+                  console.log('Remote WebRTC track ended, closing kiosk stream modal');
+                  closeRemoteScreenShare();
+                };
+              }
             };
 
             pc.onicecandidate = (event) => {
@@ -359,13 +368,19 @@ export default function KioskPage() {
     };
   }, [stationId]);
 
-  // Attach incoming video stream & invoke .play() with muted bypass (Bug Fix 1)
+  // Attach incoming video stream & invoke .play() with muted bypass (Bug Fix 1 & 2)
   useEffect(() => {
     if (incomingStream && videoRef.current) {
       videoRef.current.srcObject = incomingStream;
-      videoRef.current.play().catch((err) => {
-        console.warn('Autoplay error on video play:', err);
-      });
+      videoRef.current
+        .play()
+        .then(() => {
+          setIsAutoplayBlocked(false);
+        })
+        .catch((err) => {
+          console.warn('Autoplay failed, retrying on user gesture:', err);
+          setIsAutoplayBlocked(true);
+        });
     }
   }, [incomingStream, remoteShareModalOpen]);
 
@@ -377,6 +392,7 @@ export default function KioskPage() {
     pendingKioskIceCandidatesRef.current = [];
     setIncomingStream(null);
     setRemoteShareModalOpen(false);
+    setIsAutoplayBlocked(false);
   };
 
   /**
@@ -1197,21 +1213,52 @@ export default function KioskPage() {
           </Group>
         }
       >
-        <div style={{ width: '100%', height: 'calc(100vh - 90px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000000' }}>
+        <div style={{ position: 'relative', width: '100%', height: 'calc(100vh - 90px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000000' }}>
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
-            controls
+            className="w-full h-full object-contain pointer-events-none"
             style={{
               width: '100%',
               height: '100%',
               maxHeight: 'calc(100vh - 100px)',
               objectFit: 'contain',
               borderRadius: '8px',
+              pointerEvents: 'none',
             }}
           />
+          {isAutoplayBlocked && (
+            <div
+              onClick={() => {
+                if (videoRef.current) {
+                  videoRef.current
+                    .play()
+                    .then(() => setIsAutoplayBlocked(false))
+                    .catch((err) => console.error('Touch to play error:', err));
+                }
+              }}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                zIndex: 10,
+                cursor: 'pointer',
+              }}
+            >
+              <Button size="xl" color="blue" radius="md" leftSection={<IconPlayerPlay size={32} />}>
+                ▶ 화면을 터치하여 시청 시작
+              </Button>
+              <Text size="sm" c="gray.3" mt="xs" fw={700}>
+                브라우저 자동재생 차단을 해제하려면 화면을 한 번 터치하세요.
+              </Text>
+            </div>
+          )}
         </div>
       </Modal>
 

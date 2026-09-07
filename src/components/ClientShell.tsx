@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { AppShell, Burger, Group, NavLink, Title, Text, Box, Badge, Button, Paper, Stack, Center } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet, IconBuildingBank, IconLock, IconLogout, IconKey, IconTools, IconCalendar } from '@tabler/icons-react';
+import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet, IconBuildingBank, IconLock, IconLogout, IconKey, IconTools, IconCalendar, IconScreenShare } from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import BgmPlayer from '@/components/BgmPlayer';
 import PWAInstallButton from '@/components/PWAInstallButton';
 import AuthModal from '@/components/AuthModal';
+import KioskScreenShareModal from '@/components/KioskScreenShareModal';
 import { useAuth } from '@/context/AuthContext';
 
 import SystemMonitorWidget from '@/components/SystemMonitorWidget';
@@ -16,6 +17,7 @@ import TassAiAssistant from '@/components/TassAiAssistant';
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const [opened, { toggle }] = useDisclosure();
+  const [screenShareModalOpen, setScreenShareModalOpen] = useState(false);
   const pathname = usePathname();
   const { isAuthenticated, role, logout, openAuthModal } = useAuth();
 
@@ -119,6 +121,19 @@ export default function ClientShell({ children }: { children: React.ReactNode })
           </Group>
 
           <Group gap="xs" align="center" wrap="nowrap">
+            <Button
+              size="xs"
+              variant="light"
+              color="blue"
+              radius="md"
+              onClick={() => setScreenShareModalOpen(true)}
+              leftSection={<IconScreenShare size={14} />}
+              style={{ borderRadius: '6px', fontWeight: 800 }}
+            >
+              <span className="hidden sm:inline">🖥️ 현장 화면 공유</span>
+              <span className="inline sm:hidden">🖥️ 화면 공유</span>
+            </Button>
+
             <Link href="/kiosk" style={{ textDecoration: 'none' }}>
               <Button
                 size="xs"
@@ -131,6 +146,11 @@ export default function ClientShell({ children }: { children: React.ReactNode })
                 <span className="inline sm:hidden">🏭 키오스크</span>
               </Button>
             </Link>
+
+            <KioskScreenShareModal
+              opened={screenShareModalOpen}
+              onClose={() => setScreenShareModalOpen(false)}
+            />
 
             <PWAInstallButton />
             

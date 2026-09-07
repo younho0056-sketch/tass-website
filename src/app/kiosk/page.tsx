@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import useSWR from 'swr';
 import { notifications } from '@mantine/notifications';
 import {
@@ -16,7 +16,7 @@ import {
   Title,
   Card,
   SimpleGrid,
-  ActionIcon
+  Select
 } from '@mantine/core';
 import {
   IconBuildingFactory2,
@@ -31,7 +31,11 @@ import {
   IconPrinter,
   IconCalendar,
   IconChevronLeft,
-  IconChevronRight
+  IconChevronRight,
+  IconScreenShare,
+  IconScreenShareOff,
+  IconDeviceTv,
+  IconMapPin
 } from '@tabler/icons-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -78,7 +82,15 @@ export type PartnerDetail = {
 };
 
 const PROCESS_TABS = ['전체', '설계', '절단', '가공', '용접', '도장', '조립'];
+const ALL_STEPS_SEQUENCE = ['설계', '절단', '가공', '용접', '도장', '조립', '납품'];
 const DAY_NAMES = ['일 (Sun)', '월 (Mon)', '화 (Tue)', '수 (Wed)', '목 (Thu)', '금 (Fri)', '토 (Sat)'];
+
+const DEFAULT_STATIONS = [
+  '1번 키오스크 (설계/공정)',
+  '2번 키오스크 (절단/가공)',
+  '3번 키오스크 (용접/도장)',
+  '4번 키오스크 (조립/출고)',
+];
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -119,6 +131,15 @@ export default function KioskPage() {
   const [selectedProcess, setSelectedProcess] = useState<string>('전체');
   const [currentTime, setCurrentTime] = useState<string>('');
 
+  // Station Identification & WebRTC State (Requirement 2)
+  const [stationId, setStationId] = useState<string>('1번 키오스크 (설계/공정)');
+  const [incomingStream, setIncomingStream] = useState<MediaStream | null>(null);
+  const [remoteShareModalOpen, setRemoteShareModalOpen] = useState<boolean>(false);
+
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const signalingChannelRef = useRef<any>(null);
+
   // Step Action Confirmation Modal State
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [targetWork, setTargetWork] = useState<{
@@ -133,7 +154,7 @@ export default function KioskPage() {
   const [selectedPartnerDetail, setSelectedPartnerDetail] = useState<PartnerDetail | null>(null);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
 
-  // Delivery Calendar Modal State (Requirement 4)
+  // Delivery Calendar Modal State
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [calendarYear, setCalendarYear] = useState<number>(new Date().getFullYear());
   const [calendarMonth, setCalendarMonth] = useState<number>(new Date().getMonth());
@@ -141,6 +162,32 @@ export default function KioskPage() {
   // Print State
   const [printInvoicePartner, setPrintInvoicePartner] = useState<PartnerDetail | null>(null);
   const [printInvoiceOrder, setPrintInvoiceOrder] = useState<Order | null>(null);
+
+  // Initialize Station ID from URL query or localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const qStation = urlParams.get('station');
+    if (qStation) {
+      const matched = DEFAULT_STATIONS.find((s) => s.startsWith(qStation) || s.includes(qStation));
+      if (matched) {
+        setStationId(matched);
+        return;
+      }
+    }
+    const saved = localStorage.getItem('tass_kiosk_station');
+    if (saved) {
+      setStationId(saved);
+    }
+  }, []);
+
+  const handleStationChange = (newStation: string | null) => {
+    if (!newStation) return;
+    setStationId(newStation);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tass_kiosk_station', newStation);
+    }
+  };
 
   // SWR polling with 10s automatic revalidation
   const { data: ordersData, mutate: mutateOrders, isLoading } = useSWR('/api/orders', fetcher, {
@@ -154,23 +201,26 @@ export default function KioskPage() {
   });
 
   const orders: Order[] = useMemo(() => ordersData?.orders || [], [ordersData]);
-  const partners: PartnerDetail[] = useMemo(() => Array.isArray(partnersData) ? partnersData : [], [partnersData]);
+  const partners: PartnerDetail[] = useMemo(() => (Array.isArray(partnersData) ? partnersData : []), [partnersData]);
 
   // Realtime Clock Update
   useEffect(() => {
     const updateClock = () => {
       const now = new Date();
-      const formatted = now.toLocaleDateString('ko-KR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        weekday: 'short',
-      }) + ' ' + now.toLocaleTimeString('ko-KR', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      });
+      const formatted =
+        now.toLocaleDateString('ko-KR', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          weekday: 'short',
+        }) +
+        ' ' +
+        now.toLocaleTimeString('ko-KR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        });
       setCurrentTime(formatted);
     };
     updateClock();
@@ -178,7 +228,7 @@ export default function KioskPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Supabase Realtime Subscription for instant cross-device synchronization
+  // Supabase Realtime Subscription for instant DB sync
   useEffect(() => {
     if (!supabase) return;
     const channel = supabase
@@ -195,17 +245,126 @@ export default function KioskPage() {
     };
   }, [mutateOrders]);
 
+  // Supabase Realtime Presence & WebRTC Receiver Signal Listener (Requirement 2)
+  useEffect(() => {
+    if (!supabase || !stationId) return;
+
+    // 1. Presence Channel for Admin Online Detection
+    const presenceChannel = supabase.channel('kiosk-webrtc-presence', {
+      config: { presence: { key: stationId } },
+    });
+
+    presenceChannel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await presenceChannel.track({
+          stationId,
+          onlineAt: new Date().toISOString(),
+        });
+      }
+    });
+
+    // 2. WebRTC Signaling Broadcast Channel
+    const signalingChannel = supabase.channel('kiosk-webrtc-signaling');
+    signalingChannelRef.current = signalingChannel;
+
+    signalingChannel
+      .on('broadcast', { event: 'signal_offer' }, async (payload: any) => {
+        const data = payload?.payload;
+        if (data?.targetStationId === stationId && data?.offer) {
+          try {
+            const pc = new RTCPeerConnection({
+              iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+            });
+            peerConnectionRef.current = pc;
+
+            pc.ontrack = (event) => {
+              if (event.streams && event.streams[0]) {
+                setIncomingStream(event.streams[0]);
+                setRemoteShareModalOpen(true);
+              }
+            };
+
+            pc.onicecandidate = (event) => {
+              if (event.candidate && signalingChannelRef.current) {
+                signalingChannelRef.current.send({
+                  type: 'broadcast',
+                  event: 'signal_ice',
+                  payload: {
+                    targetStationId: stationId,
+                    candidate: event.candidate,
+                    from: stationId,
+                  },
+                });
+              }
+            };
+
+            await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+
+            signalingChannel.send({
+              type: 'broadcast',
+              event: 'signal_answer',
+              payload: {
+                targetStationId: stationId,
+                answer: pc.localDescription,
+                from: stationId,
+              },
+            });
+          } catch (err) {
+            console.error('Kiosk WebRTC offer processing error:', err);
+          }
+        }
+      })
+      .on('broadcast', { event: 'signal_ice' }, async (payload: any) => {
+        const data = payload?.payload;
+        if (data?.targetStationId === stationId && peerConnectionRef.current && data?.candidate) {
+          try {
+            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } catch (e) {
+            console.error('Kiosk ICE candidate error:', e);
+          }
+        }
+      })
+      .on('broadcast', { event: 'signal_stop' }, (payload: any) => {
+        const data = payload?.payload;
+        if (data?.targetStationId === stationId) {
+          closeRemoteScreenShare();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+      supabase.removeChannel(signalingChannel);
+    };
+  }, [stationId]);
+
+  // Attach incoming video stream to video ref when modal opens
+  useEffect(() => {
+    if (incomingStream && videoRef.current) {
+      videoRef.current.srcObject = incomingStream;
+    }
+  }, [incomingStream, remoteShareModalOpen]);
+
+  const closeRemoteScreenShare = () => {
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    setIncomingStream(null);
+    setRemoteShareModalOpen(false);
+  };
+
   /**
-   * Requirement 1: Sequential MES Pipeline Logic
+   * Sequential MES Pipeline Logic
    * For each active order, find the FIRST active step in sequence that is NOT '완료'.
    * That single step is the ONLY current eligible work step on the floor for that order.
-   * Future steps remain hidden until previous step completes!
    */
   const workList = useMemo(() => {
     const list: { order: Order; step: ProcessStep }[] = [];
 
     orders.forEach((o) => {
-      // Exclude completely finished orders
       if (o.status === '완료') return;
 
       const activeSteps = (o.steps || []).filter((s) => s.active);
@@ -214,13 +373,11 @@ export default function KioskPage() {
       const currentStep = activeSteps.find((s) => s.status !== '완료');
       if (!currentStep) return;
 
-      // Filter by selected process tab
       if (selectedProcess === '전체' || currentStep.name === selectedProcess) {
         list.push({ order: o, step: currentStep });
       }
     });
 
-    // Priority Sort: 1) '진행중' first, 2) Urgent D-Days, 3) Order ID
     return list.sort((a, b) => {
       if (a.step.status !== b.step.status) {
         return a.step.status === '진행중' ? -1 : 1;
@@ -238,9 +395,7 @@ export default function KioskPage() {
   }, [orders, selectedProcess]);
 
   /**
-   * Requirement 2: Top Tab Counts
-   * [전체] tab count = total active projects (exactly 1 per active project).
-   * Process tab counts = total projects currently waiting/in-progress at that specific step.
+   * Top Tab Counts: Exactly 1 per active project for '전체' tab
    */
   const tabCounts = useMemo(() => {
     const counts: Record<string, number> = { 전체: 0 };
@@ -252,7 +407,6 @@ export default function KioskPage() {
       if (o.status === '완료') return;
       const activeSteps = (o.steps || []).filter((s) => s.active);
 
-      // Find first non-completed step
       const currentStep = activeSteps.find((s) => s.status !== '완료');
       if (currentStep) {
         counts['전체'] += 1;
@@ -265,7 +419,7 @@ export default function KioskPage() {
     return counts;
   }, [orders]);
 
-  // Delivery Calendar Calculation (Requirement 4)
+  // Delivery Calendar Cells
   const calendarCells = useMemo(() => {
     const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
     const totalDays = new Date(calendarYear, calendarMonth + 1, 0).getDate();
@@ -346,7 +500,7 @@ export default function KioskPage() {
     }, 150);
   };
 
-  // Handle touch action click
+  // Handle touch action click for step confirmation modal
   const handleActionClick = (order: Order, step: ProcessStep) => {
     const actionType: 'START' | 'COMPLETE' = step.status === '대기' ? 'START' : 'COMPLETE';
     setTargetWork({ order, step, actionType });
@@ -378,7 +532,6 @@ export default function KioskPage() {
     const isAllComplete = activeSteps.length > 0 && completedSteps.length === activeSteps.length;
     const newOrderStatus = isAllComplete ? '완료' : '진행중';
 
-    // 1. Instant Optimistic SWR Update
     if (mutateOrders) {
       mutateOrders(
         (current: any) => {
@@ -531,7 +684,7 @@ export default function KioskPage() {
         userSelect: 'none',
       }}
     >
-      {/* 1. Header Bar */}
+      {/* 1. Header Bar (Requirement 2: Station Identifier Selector & WebRTC Indicator) */}
       <header
         className="print:hidden"
         style={{
@@ -567,9 +720,22 @@ export default function KioskPage() {
             <IconBuildingFactory2 size={24} /> TASS 🏭 현장 키오스크
           </div>
 
+          {/* Station Selector Badge (Requirement 2) */}
+          <Select
+            data={DEFAULT_STATIONS}
+            value={stationId}
+            onChange={handleStationChange}
+            leftSection={<IconMapPin size={18} color="#2563eb" />}
+            size="sm"
+            style={{ width: '230px', fontWeight: 800 }}
+            styles={{
+              input: { fontWeight: 800, color: '#1e40af', backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
+            }}
+          />
+
           <Group gap="xs" visibleFrom="sm">
             <Badge color="teal" variant="light" size="lg" style={{ fontSize: '13px', fontWeight: 700 }}>
-              🟢 실시간 DB 동기화 중
+              🟢 실시간 DB 동기화
             </Badge>
             {currentTime && (
               <Group gap={4} style={{ color: '#64748b', fontSize: '14px', fontWeight: 600 }}>
@@ -592,7 +758,7 @@ export default function KioskPage() {
             새로고침
           </Button>
 
-          {/* Delivery Calendar Button (Requirement 4) */}
+          {/* Delivery Calendar Button */}
           <Button
             variant="light"
             color="indigo"
@@ -681,7 +847,7 @@ export default function KioskPage() {
         </Group>
       </nav>
 
-      {/* 3. Main Content: Work Card List (Sequential MES Pipeline, Cleaned Layout) */}
+      {/* 3. Main Content: Work Card List */}
       <main className="print:hidden" style={{ flex: 1, padding: '20px', maxWidth: '1400px', width: '100%', margin: '0 auto' }}>
         {isLoading && workList.length === 0 ? (
           <Center style={{ minHeight: '350px' }}>
@@ -742,9 +908,9 @@ export default function KioskPage() {
                   }}
                 >
                   <Group justify="space-between" align="center" wrap="nowrap" style={{ width: '100%', height: '100%' }}>
-                    {/* Left Info Area */}
-                    <Stack justify="space-between" style={{ flex: 1, height: '100%', minWidth: 0, paddingRight: '16px' }} gap="xs">
-                      {/* Top Row: Project No & Current Active Step */}
+                    {/* Left Section: Order Info */}
+                    <Stack justify="space-between" style={{ width: selectedProcess === '전체' ? '30%' : '60%', height: '100%', minWidth: '260px' }} gap="xs">
+                      {/* Top Row: Project No & Current Step Badge */}
                       <Group gap="xs" wrap="nowrap" align="center">
                         <Badge
                           size="lg"
@@ -763,7 +929,6 @@ export default function KioskPage() {
                           {displayProjectNo}
                         </Badge>
 
-                        {/* Process Step & Status */}
                         <Badge
                           size="lg"
                           variant="filled"
@@ -780,7 +945,7 @@ export default function KioskPage() {
                         </Badge>
                       </Group>
 
-                      {/* Middle Row: Clickable Partner Name */}
+                      {/* Clickable Customer Name */}
                       <Group gap="xs" align="center" wrap="nowrap" style={{ minWidth: 0 }}>
                         <Text
                           onClick={() => handleOpenPartnerDetail(order.partnerName, order)}
@@ -799,16 +964,13 @@ export default function KioskPage() {
                         >
                           {order.partnerName}
                         </Text>
-                        <Text size="xs" c="dimmed" fw={600}>
-                          (상세 보기)
-                        </Text>
                       </Group>
 
-                      {/* Bottom Row: Item Name & Quantity */}
+                      {/* Item Name & Quantity */}
                       <Group justify="space-between" align="center" wrap="nowrap">
                         <Text
                           style={{
-                            fontSize: '20px',
+                            fontSize: '19px',
                             fontWeight: 800,
                             color: '#0f172a',
                             whiteSpace: 'nowrap',
@@ -818,18 +980,72 @@ export default function KioskPage() {
                         >
                           {order.itemName} <span style={{ color: '#d97706', fontWeight: 900 }}>- {order.quantity}개</span>
                         </Text>
-
-                        {order.memo && (
-                          <Text size="xs" c="red.7" fw={700} truncate style={{ maxWidth: '260px' }}>
-                            📝 {order.memo}
-                          </Text>
-                        )}
                       </Group>
                     </Stack>
 
-                    {/* Right Side: Due Date & Touch Action Button (Clean Right Alignment) */}
-                    <Stack align="flex-end" justify="space-between" style={{ height: '100%', minWidth: '220px' }} gap="xs">
-                      {/* Top Right: D-Day & Due Date */}
+                    {/* Middle Section: Requirement 1 - Horizontal Mini Process Step Bar (Only in '전체' tab) */}
+                    {selectedProcess === '전체' && (
+                      <div style={{ flex: 1, padding: '0 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <Text size="xs" fw={800} c="dimmed" mb={4} ta="center">
+                          ⚙️ 전체 공정 단계 스텝 바 (터치하여 개별 공정 조작 가능)
+                        </Text>
+                        <Group gap={4} justify="center" wrap="nowrap">
+                          {ALL_STEPS_SEQUENCE.map((sName) => {
+                            const stepObj = (order.steps || []).find((s) => s.name === sName);
+                            const isActiveInOrder = stepObj ? stepObj.active : true;
+                            const status = stepObj ? stepObj.status : '대기';
+                            const isCurrentStep = step.name === sName;
+
+                            if (!isActiveInOrder) return null;
+
+                            return (
+                              <button
+                                key={sName}
+                                onClick={() => {
+                                  if (stepObj) {
+                                    handleActionClick(order, stepObj);
+                                  }
+                                }}
+                                style={{
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  fontSize: '13px',
+                                  fontWeight: isCurrentStep ? 900 : 700,
+                                  cursor: 'pointer',
+                                  border: isCurrentStep
+                                    ? status === '진행중'
+                                      ? '2px solid #2563eb'
+                                      : '2px solid #d97706'
+                                    : status === '완료'
+                                    ? '1px solid #86efac'
+                                    : '1px solid #cbd5e1',
+                                  backgroundColor: status === '완료'
+                                    ? '#dcfce7'
+                                    : isCurrentStep
+                                    ? status === '진행중'
+                                      ? '#2563eb'
+                                      : '#d97706'
+                                    : '#ffffff',
+                                  color: status === '완료'
+                                    ? '#15803d'
+                                    : isCurrentStep
+                                    ? '#ffffff'
+                                    : '#475569',
+                                  transition: 'all 0.15s ease',
+                                  boxShadow: isCurrentStep ? '0 2px 8px rgba(0, 0, 0, 0.15)' : 'none',
+                                }}
+                              >
+                                {status === '완료' ? `✓ ${sName}` : isCurrentStep ? `▶ ${sName}` : sName}
+                              </button>
+                            );
+                          })}
+                        </Group>
+                      </div>
+                    )}
+
+                    {/* Right Section: Due Date & Action Button */}
+                    <Stack align="flex-end" justify="space-between" style={{ height: '100%', minWidth: '210px' }} gap="xs">
+                      {/* D-Day & Due Date */}
                       <Group gap="xs" align="center">
                         <Badge
                           size="lg"
@@ -850,46 +1066,74 @@ export default function KioskPage() {
                         </Text>
                       </Group>
 
-                      {/* Bottom Right: Touch Action Button (190px x 75px) */}
-                      <div style={{ width: '190px', height: '75px' }}>
-                        {isWaiting ? (
-                          <Button
-                            color="blue"
-                            fullWidth
-                            onClick={() => handleActionClick(order, step)}
-                            leftSection={<IconPlayerPlay size={26} />}
-                            style={{
-                              height: '75px',
-                              width: '190px',
-                              fontSize: '22px',
-                              fontWeight: 900,
-                              borderRadius: '12px',
-                              backgroundColor: '#2563eb',
-                              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
-                            }}
-                          >
-                            ▶ 시작
-                          </Button>
-                        ) : (
-                          <Button
-                            color="green"
-                            fullWidth
-                            onClick={() => handleActionClick(order, step)}
-                            leftSection={<IconCheck size={28} />}
-                            style={{
-                              height: '75px',
-                              width: '190px',
-                              fontSize: '22px',
-                              fontWeight: 900,
-                              borderRadius: '12px',
-                              backgroundColor: '#16a34a',
-                              boxShadow: '0 4px 14px rgba(22, 163, 74, 0.35)',
-                            }}
-                          >
-                            ✓ 완료 처리
-                          </Button>
-                        )}
-                      </div>
+                      {/* Right Action Button: Single Large Button in Specific Process Tabs */}
+                      {selectedProcess !== '전체' ? (
+                        <div style={{ width: '190px', height: '75px' }}>
+                          {isWaiting ? (
+                            <Button
+                              color="blue"
+                              fullWidth
+                              onClick={() => handleActionClick(order, step)}
+                              leftSection={<IconPlayerPlay size={26} />}
+                              style={{
+                                height: '75px',
+                                width: '190px',
+                                fontSize: '22px',
+                                fontWeight: 900,
+                                borderRadius: '12px',
+                                backgroundColor: '#2563eb',
+                                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                              }}
+                            >
+                              ▶ 시작
+                            </Button>
+                          ) : (
+                            <Button
+                              color="green"
+                              fullWidth
+                              onClick={() => handleActionClick(order, step)}
+                              leftSection={<IconCheck size={28} />}
+                              style={{
+                                height: '75px',
+                                width: '190px',
+                                fontSize: '22px',
+                                fontWeight: 900,
+                                borderRadius: '12px',
+                                backgroundColor: '#16a34a',
+                                boxShadow: '0 4px 14px rgba(22, 163, 74, 0.35)',
+                              }}
+                            >
+                              ✓ 완료 처리
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ width: '160px' }}>
+                          {isWaiting ? (
+                            <Button
+                              color="blue"
+                              size="md"
+                              fullWidth
+                              onClick={() => handleActionClick(order, step)}
+                              leftSection={<IconPlayerPlay size={18} />}
+                              style={{ fontWeight: 900, height: '48px' }}
+                            >
+                              ▶ 시작
+                            </Button>
+                          ) : (
+                            <Button
+                              color="green"
+                              size="md"
+                              fullWidth
+                              onClick={() => handleActionClick(order, step)}
+                              leftSection={<IconCheck size={20} />}
+                              style={{ fontWeight: 900, height: '48px' }}
+                            >
+                              ✓ 완료 처리
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </Stack>
                   </Group>
                 </Paper>
@@ -899,7 +1143,55 @@ export default function KioskPage() {
         )}
       </main>
 
-      {/* 4. Delivery Calendar Modal (Requirement 4) */}
+      {/* 4. WebRTC Full-Screen Incoming Screen Share Overlay Modal (Requirement 2) */}
+      <Modal
+        opened={remoteShareModalOpen}
+        onClose={closeRemoteScreenShare}
+        fullScreen
+        zIndex={1000}
+        styles={{
+          content: { backgroundColor: '#0f172a', color: '#ffffff' },
+          header: { backgroundColor: '#0f172a', borderBottom: '1px solid #1e293b' },
+        }}
+        title={
+          <Group justify="space-between" align="center" style={{ width: '100%' }}>
+            <Group gap="md">
+              <IconScreenShare size={28} color="#38bdf8" />
+              <Badge color="blue" size="xl" variant="filled" style={{ fontSize: '16px', fontWeight: 900 }}>
+                🖥️ 사무실 관리자 화면 실시간 공유 중 (📍 {stationId})
+              </Badge>
+            </Group>
+            <Button
+              color="red"
+              size="md"
+              radius="md"
+              onClick={closeRemoteScreenShare}
+              leftSection={<IconScreenShareOff size={20} />}
+              style={{ fontWeight: 900 }}
+            >
+              ❌ 화면 닫기
+            </Button>
+          </Group>
+        }
+      >
+        <div style={{ width: '100%', height: 'calc(100vh - 90px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000000' }}>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            controls
+            style={{
+              width: '100%',
+              height: '100%',
+              maxHeight: 'calc(100vh - 100px)',
+              objectFit: 'contain',
+              borderRadius: '8px',
+            }}
+          />
+        </div>
+      </Modal>
+
+      {/* 5. Delivery Calendar Modal */}
       <Modal
         opened={calendarModalOpen}
         onClose={() => setCalendarModalOpen(false)}
@@ -920,7 +1212,6 @@ export default function KioskPage() {
         }}
       >
         <Stack gap="md" py="xs">
-          {/* Calendar Header Controls */}
           <Group justify="space-between" align="center">
             <Group gap="xs">
               <Button variant="light" color="gray" size="sm" onClick={prevCalendarMonth} leftSection={<IconChevronLeft size={16} />}>
@@ -939,7 +1230,6 @@ export default function KioskPage() {
             </Text>
           </Group>
 
-          {/* Calendar Grid Table */}
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' }}>
               <thead>
@@ -1037,7 +1327,7 @@ export default function KioskPage() {
         </Stack>
       </Modal>
 
-      {/* 5. Partner Detail Modal */}
+      {/* 6. Partner Detail Modal */}
       <Modal
         opened={partnerModalOpen}
         onClose={() => setPartnerModalOpen(false)}
@@ -1170,7 +1460,7 @@ export default function KioskPage() {
         )}
       </Modal>
 
-      {/* 6. Step Confirmation Popup Modal */}
+      {/* 7. Step Confirmation Popup Modal */}
       <Modal
         opened={confirmModalOpen}
         onClose={() => !isUpdating && setConfirmModalOpen(false)}
@@ -1243,7 +1533,7 @@ export default function KioskPage() {
         )}
       </Modal>
 
-      {/* 7. Printable Shipping Label / Invoice */}
+      {/* 8. Printable Shipping Label / Invoice */}
       <div className="hidden print:block">
         {printInvoicePartner && (
           <div className="print-container">

@@ -21,6 +21,7 @@ import { useAuth } from '@/context/AuthContext';
 import OrderRow, { Order, ProcessStep } from '@/components/OrderRow';
 import OrderCard from '@/components/OrderCard';
 import { compressImage } from '@/lib/imageCompressor';
+import { supabase } from '@/lib/supabase';
 
 type PartnerDetail = {
   id: number;
@@ -114,16 +115,34 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [allPartners, setAllPartners] = useState<PartnerDetail[]>([]);
 
-  // SWR Caching for instant load & background revalidation
+  // SWR Caching for instant load & background revalidation (10s interval for realtime sync)
   const { data: ordersData, mutate: mutateOrders, isLoading } = useSWR('/api/orders', fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 5000,
+    revalidateOnFocus: true,
+    refreshInterval: 10000,
+    dedupingInterval: 3000,
   });
 
   const { data: partnersData } = useSWR('/api/partners', fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 10000,
   });
+
+  // Supabase Realtime Postgres Changes Subscription
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase
+      .channel('office-orders-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Order' }, () => {
+        if (mutateOrders) {
+          mutateOrders();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [mutateOrders]);
 
   useEffect(() => {
     if (ordersData?.orders && Array.isArray(ordersData.orders)) {

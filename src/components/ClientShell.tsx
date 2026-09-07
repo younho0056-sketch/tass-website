@@ -39,7 +39,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     }
   }, []);
 
-  if (pathname === '/') {
+  if (pathname === '/' || pathname === '/kiosk') {
     return (
       <>
         {children}
@@ -119,6 +119,19 @@ export default function ClientShell({ children }: { children: React.ReactNode })
           </Group>
 
           <Group gap="xs" align="center" wrap="nowrap">
+            <Link href="/kiosk" style={{ textDecoration: 'none' }}>
+              <Button
+                size="xs"
+                variant="filled"
+                color="teal"
+                radius="md"
+                style={{ borderRadius: '6px', fontWeight: 800 }}
+              >
+                <span className="hidden sm:inline">🏭 현장 키오스크 모드</span>
+                <span className="inline sm:hidden">🏭 키오스크</span>
+              </Button>
+            </Link>
+
             <PWAInstallButton />
             
             {/* 권한 상태 표시 배지 */}

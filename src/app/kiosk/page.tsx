@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import useSWR from 'swr';
 import { notifications } from '@mantine/notifications';
 import {
@@ -15,7 +15,8 @@ import {
   Center,
   Title,
   Card,
-  SimpleGrid
+  SimpleGrid,
+  ActionIcon
 } from '@mantine/core';
 import {
   IconBuildingFactory2,
@@ -27,7 +28,10 @@ import {
   IconClock,
   IconPhone,
   IconMail,
-  IconPrinter
+  IconPrinter,
+  IconCalendar,
+  IconChevronLeft,
+  IconChevronRight
 } from '@tabler/icons-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -74,6 +78,7 @@ export type PartnerDetail = {
 };
 
 const PROCESS_TABS = ['전체', '설계', '절단', '가공', '용접', '도장', '조립'];
+const DAY_NAMES = ['일 (Sun)', '월 (Mon)', '화 (Tue)', '수 (Wed)', '목 (Thu)', '금 (Fri)', '토 (Sat)'];
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -127,6 +132,11 @@ export default function KioskPage() {
   const [partnerModalOpen, setPartnerModalOpen] = useState(false);
   const [selectedPartnerDetail, setSelectedPartnerDetail] = useState<PartnerDetail | null>(null);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
+
+  // Delivery Calendar Modal State (Requirement 4)
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [calendarYear, setCalendarYear] = useState<number>(new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(new Date().getMonth());
 
   // Print State
   const [printInvoicePartner, setPrintInvoicePartner] = useState<PartnerDetail | null>(null);
@@ -185,22 +195,29 @@ export default function KioskPage() {
     };
   }, [mutateOrders]);
 
-  // Extract work items (Order + target ProcessStep) based on current filter
+  /**
+   * Requirement 1: Sequential MES Pipeline Logic
+   * For each active order, find the FIRST active step in sequence that is NOT '완료'.
+   * That single step is the ONLY current eligible work step on the floor for that order.
+   * Future steps remain hidden until previous step completes!
+   */
   const workList = useMemo(() => {
     const list: { order: Order; step: ProcessStep }[] = [];
 
     orders.forEach((o) => {
+      // Exclude completely finished orders
       if (o.status === '완료') return;
 
       const activeSteps = (o.steps || []).filter((s) => s.active);
 
-      activeSteps.forEach((step) => {
-        if (step.status === '대기' || step.status === '진행중') {
-          if (selectedProcess === '전체' || step.name === selectedProcess) {
-            list.push({ order: o, step });
-          }
-        }
-      });
+      // Find the FIRST step in sequence whose status is NOT '완료'
+      const currentStep = activeSteps.find((s) => s.status !== '완료');
+      if (!currentStep) return;
+
+      // Filter by selected process tab
+      if (selectedProcess === '전체' || currentStep.name === selectedProcess) {
+        list.push({ order: o, step: currentStep });
+      }
     });
 
     // Priority Sort: 1) '진행중' first, 2) Urgent D-Days, 3) Order ID
@@ -220,7 +237,11 @@ export default function KioskPage() {
     });
   }, [orders, selectedProcess]);
 
-  // Compute counts for top process filter tabs
+  /**
+   * Requirement 2: Top Tab Counts
+   * [전체] tab count = total active projects (exactly 1 per active project).
+   * Process tab counts = total projects currently waiting/in-progress at that specific step.
+   */
   const tabCounts = useMemo(() => {
     const counts: Record<string, number> = { 전체: 0 };
     PROCESS_TABS.forEach((tab) => {
@@ -229,23 +250,73 @@ export default function KioskPage() {
 
     orders.forEach((o) => {
       if (o.status === '완료') return;
-      (o.steps || []).forEach((s) => {
-        if (s.active && (s.status === '대기' || s.status === '진행중')) {
-          counts['전체'] = (counts['전체'] || 0) + 1;
-          if (counts[s.name] !== undefined) {
-            counts[s.name] += 1;
-          }
+      const activeSteps = (o.steps || []).filter((s) => s.active);
+
+      // Find first non-completed step
+      const currentStep = activeSteps.find((s) => s.status !== '완료');
+      if (currentStep) {
+        counts['전체'] += 1;
+        if (counts[currentStep.name] !== undefined) {
+          counts[currentStep.name] += 1;
         }
-      });
+      }
     });
 
     return counts;
   }, [orders]);
 
-  // Open Partner Detail Modal (Requirement 4)
+  // Delivery Calendar Calculation (Requirement 4)
+  const calendarCells = useMemo(() => {
+    const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+    const totalDays = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+
+    const cells: { dateStr: string | null; dayNum: number | null; isCurrentMonth: boolean; dayOfWeek: number }[] = [];
+
+    for (let i = 0; i < firstDay; i++) {
+      cells.push({ dateStr: null, dayNum: null, isCurrentMonth: false, dayOfWeek: i });
+    }
+
+    for (let d = 1; d <= totalDays; d++) {
+      const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dayOfWeek = (firstDay + d - 1) % 7;
+      cells.push({ dateStr, dayNum: d, isCurrentMonth: true, dayOfWeek });
+    }
+
+    while (cells.length % 7 !== 0) {
+      cells.push({ dateStr: null, dayNum: null, isCurrentMonth: false, dayOfWeek: cells.length % 7 });
+    }
+
+    return cells;
+  }, [calendarYear, calendarMonth]);
+
+  const prevCalendarMonth = () => {
+    if (calendarMonth === 0) {
+      setCalendarYear((y) => y - 1);
+      setCalendarMonth(11);
+    } else {
+      setCalendarMonth((m) => m - 1);
+    }
+  };
+
+  const nextCalendarMonth = () => {
+    if (calendarMonth === 11) {
+      setCalendarYear((y) => y + 1);
+      setCalendarMonth(0);
+    } else {
+      setCalendarMonth((m) => m + 1);
+    }
+  };
+
+  const resetCalendarToday = () => {
+    const now = new Date();
+    setCalendarYear(now.getFullYear());
+    setCalendarMonth(now.getMonth());
+  };
+
+  // Open Partner Detail Modal
   const handleOpenPartnerDetail = (partnerName: string, order: Order) => {
     setSelectedOrderForInvoice(order);
-    const found = partners.find(p => p.name === partnerName);
+    const found = partners.find((p) => p.name === partnerName);
     if (found) {
       setSelectedPartnerDetail(found);
     } else {
@@ -460,7 +531,7 @@ export default function KioskPage() {
         userSelect: 'none',
       }}
     >
-      {/* 1. Header Bar (Requirement 1: White/Black High Contrast) */}
+      {/* 1. Header Bar */}
       <header
         className="print:hidden"
         style={{
@@ -521,7 +592,19 @@ export default function KioskPage() {
             새로고침
           </Button>
 
-          {/* Switch to Admin Mode Button (Requirement 1 & 4) */}
+          {/* Delivery Calendar Button (Requirement 4) */}
+          <Button
+            variant="light"
+            color="indigo"
+            size="md"
+            onClick={() => setCalendarModalOpen(true)}
+            leftSection={<IconCalendar size={20} />}
+            style={{ height: '48px', fontWeight: 800 }}
+          >
+            📅 납기 캘린더
+          </Button>
+
+          {/* Switch to Admin Mode Button */}
           <Button
             color="blue"
             size="md"
@@ -541,7 +624,7 @@ export default function KioskPage() {
         </Group>
       </header>
 
-      {/* 2. Top Process Filter Tabs (Requirement 1 & 2: 64px Large Touch Tabs) */}
+      {/* 2. Top Process Filter Tabs */}
       <nav
         className="print:hidden"
         style={{
@@ -598,7 +681,7 @@ export default function KioskPage() {
         </Group>
       </nav>
 
-      {/* 3. Main Content: Work Card List (Requirement 1, 2, 3: Fixed Height 140px, White/Black Theme) */}
+      {/* 3. Main Content: Work Card List (Sequential MES Pipeline, Cleaned Layout) */}
       <main className="print:hidden" style={{ flex: 1, padding: '20px', maxWidth: '1400px', width: '100%', margin: '0 auto' }}>
         {isLoading && workList.length === 0 ? (
           <Center style={{ minHeight: '350px' }}>
@@ -651,7 +734,6 @@ export default function KioskPage() {
                     border: '1px solid #e2e8f0',
                     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
                     minHeight: '140px',
-                    height: '140px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -660,11 +742,10 @@ export default function KioskPage() {
                   }}
                 >
                   <Group justify="space-between" align="center" wrap="nowrap" style={{ width: '100%', height: '100%' }}>
-                    {/* Left Info Column (Requirement 1, 2, 4: Clean grid layout & Clickable Partner Name) */}
-                    <Stack justify="space-between" style={{ flex: 1, height: '100%', minWidth: 0, paddingRight: '16px' }}>
-                      {/* Top Row: Badges & D-Day */}
+                    {/* Left Info Area */}
+                    <Stack justify="space-between" style={{ flex: 1, height: '100%', minWidth: 0, paddingRight: '16px' }} gap="xs">
+                      {/* Top Row: Project No & Current Active Step */}
                       <Group gap="xs" wrap="nowrap" align="center">
-                        {/* Project Number */}
                         <Badge
                           size="lg"
                           variant="filled"
@@ -675,21 +756,21 @@ export default function KioskPage() {
                             fontSize: '15px',
                             fontFamily: 'monospace',
                             fontWeight: 900,
-                            padding: '10px 12px',
+                            padding: '8px 12px',
                             borderRadius: '6px',
                           }}
                         >
                           {displayProjectNo}
                         </Badge>
 
-                        {/* Process Step Badge */}
+                        {/* Process Step & Status */}
                         <Badge
                           size="lg"
                           variant="filled"
                           style={{
                             fontSize: '15px',
                             fontWeight: 900,
-                            padding: '10px 14px',
+                            padding: '8px 14px',
                             borderRadius: '6px',
                             backgroundColor: isWaiting ? '#d97706' : '#16a34a',
                             color: '#ffffff',
@@ -697,30 +778,9 @@ export default function KioskPage() {
                         >
                           {step.name} ({step.status})
                         </Badge>
-
-                        {/* D-Day Highlight Badge */}
-                        <Badge
-                          size="lg"
-                          variant="filled"
-                          style={{
-                            backgroundColor: dDayInfo.isUrgent ? '#ef4444' : '#2563eb',
-                            color: '#ffffff',
-                            fontSize: '14px',
-                            fontWeight: 900,
-                            padding: '10px 14px',
-                            borderRadius: '6px',
-                            boxShadow: dDayInfo.isUrgent ? '0 0 10px rgba(239, 68, 68, 0.4)' : 'none',
-                          }}
-                        >
-                          {dDayInfo.dDayText}
-                        </Badge>
-
-                        <Text size="xs" c="gray.6" fw={600} style={{ marginLeft: 'auto' }}>
-                          📅 납기일: {order.dueDate || '미정'}
-                        </Text>
                       </Group>
 
-                      {/* Middle Row: Clickable Partner Name (Requirement 4: Opens Partner Detail Modal) */}
+                      {/* Middle Row: Clickable Partner Name */}
                       <Group gap="xs" align="center" wrap="nowrap" style={{ minWidth: 0 }}>
                         <Text
                           onClick={() => handleOpenPartnerDetail(order.partnerName, order)}
@@ -735,13 +795,12 @@ export default function KioskPage() {
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
-                            transition: 'color 0.15s ease',
                           }}
                         >
                           {order.partnerName}
                         </Text>
                         <Text size="xs" c="dimmed" fw={600}>
-                          (클릭 시 상세 정보)
+                          (상세 보기)
                         </Text>
                       </Group>
 
@@ -761,55 +820,77 @@ export default function KioskPage() {
                         </Text>
 
                         {order.memo && (
-                          <Text size="xs" c="red.7" fw={700} truncate style={{ maxWidth: '280px' }}>
+                          <Text size="xs" c="red.7" fw={700} truncate style={{ maxWidth: '260px' }}>
                             📝 {order.memo}
                           </Text>
                         )}
                       </Group>
                     </Stack>
 
-                    {/* Right Touch Action Button (Requirement 3: Enlarged Touch Target Width 190px, Height 80px) */}
-                    <div style={{ width: '190px', minWidth: '190px', height: '80px' }}>
-                      {isWaiting ? (
-                        /* Blue Button [ ▶ 시작 ] (Requirement 3) */
-                        <Button
-                          color="blue"
-                          fullWidth
-                          onClick={() => handleActionClick(order, step)}
-                          leftSection={<IconPlayerPlay size={28} />}
+                    {/* Right Side: Due Date & Touch Action Button (Clean Right Alignment) */}
+                    <Stack align="flex-end" justify="space-between" style={{ height: '100%', minWidth: '220px' }} gap="xs">
+                      {/* Top Right: D-Day & Due Date */}
+                      <Group gap="xs" align="center">
+                        <Badge
+                          size="lg"
+                          variant="filled"
                           style={{
-                            height: '80px',
-                            width: '190px',
-                            fontSize: '22px',
+                            backgroundColor: dDayInfo.isUrgent ? '#ef4444' : '#2563eb',
+                            color: '#ffffff',
+                            fontSize: '13px',
                             fontWeight: 900,
-                            borderRadius: '12px',
-                            backgroundColor: '#2563eb',
-                            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
                           }}
                         >
-                          ▶ 시작
-                        </Button>
-                      ) : (
-                        /* Green Button [ ✓ 완료 처리 ] (Requirement 3) */
-                        <Button
-                          color="green"
-                          fullWidth
-                          onClick={() => handleActionClick(order, step)}
-                          leftSection={<IconCheck size={30} />}
-                          style={{
-                            height: '80px',
-                            width: '190px',
-                            fontSize: '22px',
-                            fontWeight: 900,
-                            borderRadius: '12px',
-                            backgroundColor: '#16a34a',
-                            boxShadow: '0 4px 14px rgba(22, 163, 74, 0.35)',
-                          }}
-                        >
-                          ✓ 완료 처리
-                        </Button>
-                      )}
-                    </div>
+                          {dDayInfo.dDayText}
+                        </Badge>
+                        <Text size="xs" c="gray.6" fw={700}>
+                          납기: {order.dueDate || '미정'}
+                        </Text>
+                      </Group>
+
+                      {/* Bottom Right: Touch Action Button (190px x 75px) */}
+                      <div style={{ width: '190px', height: '75px' }}>
+                        {isWaiting ? (
+                          <Button
+                            color="blue"
+                            fullWidth
+                            onClick={() => handleActionClick(order, step)}
+                            leftSection={<IconPlayerPlay size={26} />}
+                            style={{
+                              height: '75px',
+                              width: '190px',
+                              fontSize: '22px',
+                              fontWeight: 900,
+                              borderRadius: '12px',
+                              backgroundColor: '#2563eb',
+                              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                            }}
+                          >
+                            ▶ 시작
+                          </Button>
+                        ) : (
+                          <Button
+                            color="green"
+                            fullWidth
+                            onClick={() => handleActionClick(order, step)}
+                            leftSection={<IconCheck size={28} />}
+                            style={{
+                              height: '75px',
+                              width: '190px',
+                              fontSize: '22px',
+                              fontWeight: 900,
+                              borderRadius: '12px',
+                              backgroundColor: '#16a34a',
+                              boxShadow: '0 4px 14px rgba(22, 163, 74, 0.35)',
+                            }}
+                          >
+                            ✓ 완료 처리
+                          </Button>
+                        )}
+                      </div>
+                    </Stack>
                   </Group>
                 </Paper>
               );
@@ -818,7 +899,145 @@ export default function KioskPage() {
         )}
       </main>
 
-      {/* 4. Partner Detail Modal (Requirement 4) */}
+      {/* 4. Delivery Calendar Modal (Requirement 4) */}
+      <Modal
+        opened={calendarModalOpen}
+        onClose={() => setCalendarModalOpen(false)}
+        title={
+          <Group gap="md" align="center">
+            <IconCalendar size={28} color="#2563eb" />
+            <Text fw={900} size="xl" c="blue.8">
+              TASS 사내 수주 납기 캘린더 ({calendarYear}년 {calendarMonth + 1}월)
+            </Text>
+          </Group>
+        }
+        size="90%"
+        centered
+        radius="lg"
+        styles={{
+          content: { backgroundColor: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1', maxWidth: '1200px' },
+          header: { backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0' },
+        }}
+      >
+        <Stack gap="md" py="xs">
+          {/* Calendar Header Controls */}
+          <Group justify="space-between" align="center">
+            <Group gap="xs">
+              <Button variant="light" color="gray" size="sm" onClick={prevCalendarMonth} leftSection={<IconChevronLeft size={16} />}>
+                이전달
+              </Button>
+              <Button variant="light" color="blue" size="sm" onClick={resetCalendarToday}>
+                오늘
+              </Button>
+              <Button variant="light" color="gray" size="sm" onClick={nextCalendarMonth} rightSection={<IconChevronRight size={16} />}>
+                다음달
+              </Button>
+            </Group>
+
+            <Text fw={900} size="lg" c="dark">
+              {calendarYear}년 {calendarMonth + 1}월
+            </Text>
+          </Group>
+
+          {/* Calendar Grid Table */}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f1f5f9' }}>
+                  {DAY_NAMES.map((day, idx) => (
+                    <th
+                      key={day}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        padding: '10px',
+                        textAlign: 'center',
+                        color: idx === 0 ? '#dc2626' : idx === 6 ? '#2563eb' : '#0f172a',
+                        fontWeight: 900,
+                        fontSize: '14px',
+                      }}
+                    >
+                      {day}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: Math.ceil(calendarCells.length / 7) }).map((_, weekIdx) => {
+                  const weekDays = calendarCells.slice(weekIdx * 7, weekIdx * 7 + 7);
+                  return (
+                    <tr key={weekIdx}>
+                      {weekDays.map((cell, dayIdx) => {
+                        const dayOrders = cell.dateStr ? orders.filter((o) => o.dueDate === cell.dateStr) : [];
+                        return (
+                          <td
+                            key={dayIdx}
+                            style={{
+                              border: '1px solid #e2e8f0',
+                              height: '110px',
+                              verticalAlign: 'top',
+                              padding: '6px',
+                              backgroundColor: !cell.isCurrentMonth ? '#f8fafc' : '#ffffff',
+                            }}
+                          >
+                            {cell.dayNum && (
+                              <div
+                                style={{
+                                  fontWeight: 900,
+                                  fontSize: '14px',
+                                  marginBottom: '4px',
+                                  color: dayIdx === 0 ? '#dc2626' : dayIdx === 6 ? '#2563eb' : '#0f172a',
+                                }}
+                              >
+                                {cell.dayNum}
+                              </div>
+                            )}
+
+                            <Stack gap={4}>
+                              {dayOrders.map((o) => {
+                                const isCompleted = o.status === '완료';
+                                const dDay = getDDayInfo(o.dueDate);
+                                const pNo = o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`;
+
+                                return (
+                                  <div
+                                    key={o.id}
+                                    style={{
+                                      fontSize: '11px',
+                                      lineHeight: 1.3,
+                                      padding: '4px 6px',
+                                      borderRadius: '4px',
+                                      border: '1px solid #cbd5e1',
+                                      backgroundColor: isCompleted
+                                        ? '#dcfce7'
+                                        : dDay.isUrgent
+                                        ? '#fee2e2'
+                                        : '#e0f2fe',
+                                      color: isCompleted
+                                        ? '#15803d'
+                                        : dDay.isUrgent
+                                        ? '#b91c1c'
+                                        : '#0369a1',
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    [{pNo}] {o.partnerName} - {o.itemName} ({o.quantity}개)
+                                  </div>
+                                );
+                              })}
+                            </Stack>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Stack>
+      </Modal>
+
+      {/* 5. Partner Detail Modal */}
       <Modal
         opened={partnerModalOpen}
         onClose={() => setPartnerModalOpen(false)}
@@ -936,7 +1155,6 @@ export default function KioskPage() {
                     이메일
                   </Button>
                 )}
-                {/* Print Invoice Button (Requirement 4) */}
                 <Button
                   leftSection={<IconPrinter size={18} />}
                   color="indigo"
@@ -952,7 +1170,7 @@ export default function KioskPage() {
         )}
       </Modal>
 
-      {/* 5. Step Confirmation Popup Modal */}
+      {/* 6. Step Confirmation Popup Modal */}
       <Modal
         opened={confirmModalOpen}
         onClose={() => !isUpdating && setConfirmModalOpen(false)}
@@ -1025,7 +1243,7 @@ export default function KioskPage() {
         )}
       </Modal>
 
-      {/* 6. Printable Shipping Label / Invoice (A4 print view) */}
+      {/* 7. Printable Shipping Label / Invoice */}
       <div className="hidden print:block">
         {printInvoicePartner && (
           <div className="print-container">
@@ -1034,7 +1252,7 @@ export default function KioskPage() {
                 <h2 style={{ fontSize: '18pt', fontWeight: 900, margin: 0, letterSpacing: '2px' }}>TASS 거래명세표 및 운송장 (INVOICE)</h2>
                 <span style={{ fontSize: '9pt', color: '#444' }}>발행일자: {todayStr} | 문서번호: TASS-INV-{printInvoiceOrder?.id || Date.now()}</span>
               </div>
-              
+
               <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4mm', fontSize: '9.5pt' }}>
                 <tbody>
                   <tr>
@@ -1085,13 +1303,6 @@ export default function KioskPage() {
                       <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.status}</td>
                     </tr>
                   ))}
-                  {(printInvoiceOrder ? [printInvoiceOrder] : orders.filter(o => o.partnerName === printInvoicePartner.name)).length === 0 && (
-                    <tr>
-                      <td colSpan={7} style={{ border: '1px solid #000', padding: '3mm', textAlign: 'center', color: '#666' }}>
-                        해당 거래처의 수주 내역이 존재하지 않습니다.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
 

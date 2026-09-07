@@ -372,6 +372,7 @@ export default function KioskPage() {
   useEffect(() => {
     if (incomingStream && videoRef.current) {
       videoRef.current.srcObject = incomingStream;
+      videoRef.current.muted = true;
       videoRef.current
         .play()
         .then(() => {
@@ -1215,7 +1216,19 @@ export default function KioskPage() {
       >
         <div style={{ position: 'relative', width: '100%', height: 'calc(100vh - 90px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000000' }}>
           <video
-            ref={videoRef}
+            ref={(node) => {
+              videoRef.current = node;
+              if (node && incomingStream) {
+                node.srcObject = incomingStream;
+                node.muted = true;
+                node.play()
+                  .then(() => setIsAutoplayBlocked(false))
+                  .catch((err) => {
+                    console.warn('Autoplay blocked on video node mount:', err);
+                    setIsAutoplayBlocked(true);
+                  });
+              }
+            }}
             autoPlay
             playsInline
             muted

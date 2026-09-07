@@ -970,7 +970,7 @@ export default function KioskPage() {
                   <Group justify="space-between" align="center" wrap="nowrap" style={{ width: '100%', height: '100%' }}>
                     {/* Left Section: Order Info */}
                     <Stack justify="space-between" style={{ width: selectedProcess === '전체' ? '30%' : '60%', height: '100%', minWidth: '260px' }} gap="xs">
-                      {/* Top Row: Project No & Current Step Badge */}
+                      {/* Top Row: Project No Identification Badge Only (Req 4) */}
                       <Group gap="xs" wrap="nowrap" align="center">
                         <Badge
                           size="lg"
@@ -987,21 +987,6 @@ export default function KioskPage() {
                           }}
                         >
                           {displayProjectNo}
-                        </Badge>
-
-                        <Badge
-                          size="lg"
-                          variant="filled"
-                          style={{
-                            fontSize: '15px',
-                            fontWeight: 900,
-                            padding: '8px 14px',
-                            borderRadius: '6px',
-                            backgroundColor: isWaiting ? '#d97706' : '#16a34a',
-                            color: '#ffffff',
-                          }}
-                        >
-                          {step.name} ({step.status})
                         </Badge>
                       </Group>
 
@@ -1026,7 +1011,7 @@ export default function KioskPage() {
                         </Text>
                       </Group>
 
-                      {/* Item Name & Quantity */}
+                      {/* Item Name & Quantity (Req 5: Default black color for quantity) */}
                       <Group justify="space-between" align="center" wrap="nowrap">
                         <Text
                           style={{
@@ -1038,17 +1023,14 @@ export default function KioskPage() {
                             textOverflow: 'ellipsis',
                           }}
                         >
-                          {order.itemName} <span style={{ color: '#d97706', fontWeight: 900 }}>- {order.quantity}개</span>
+                          {order.itemName} <span style={{ color: '#0f172a', fontWeight: 900 }}>- {order.quantity}개</span>
                         </Text>
                       </Group>
                     </Stack>
 
-                    {/* Middle Section: Requirement 1 - Horizontal Mini Process Step Bar (Only in '전체' tab) */}
+                    {/* Middle Section: Requirement 2 & 3 - Horizontal Mini Process Step Bar (Only in '전체' tab) */}
                     {selectedProcess === '전체' && (
                       <div style={{ flex: 1, padding: '0 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                        <Text size="xs" fw={800} c="dimmed" mb={4} ta="center">
-                          ⚙️ 전체 공정 단계 스텝 바 (터치하여 개별 공정 조작 가능)
-                        </Text>
                         <Group gap={4} justify="center" wrap="nowrap">
                           {ALL_STEPS_SEQUENCE.map((sName) => {
                             const stepObj = (order.steps || []).find((s) => s.name === sName);
@@ -1057,6 +1039,26 @@ export default function KioskPage() {
                             const isCurrentStep = step.name === sName;
 
                             if (!isActiveInOrder) return null;
+
+                            // Requirement 2: Unified 3-stage step bar color rules
+                            let btnBg = '#ffffff';
+                            let btnColor = '#0f172a';
+                            let btnBorder = '1px solid #cbd5e1';
+
+                            if (status === '완료') {
+                              btnBg = '#16a34a';
+                              btnColor = '#ffffff';
+                              btnBorder = '1px solid #16a34a';
+                            } else if (status === '진행중') {
+                              btnBg = '#2563eb';
+                              btnColor = '#ffffff';
+                              btnBorder = '1px solid #2563eb';
+                            } else {
+                              // 대기 (미진행)
+                              btnBg = '#ffffff';
+                              btnColor = '#0f172a';
+                              btnBorder = isCurrentStep ? '2px solid #2563eb' : '1px solid #cbd5e1';
+                            }
 
                             return (
                               <button
@@ -1070,32 +1072,16 @@ export default function KioskPage() {
                                   padding: '6px 10px',
                                   borderRadius: '6px',
                                   fontSize: '13px',
-                                  fontWeight: isCurrentStep ? 900 : 700,
+                                  fontWeight: (isCurrentStep || status !== '대기') ? 900 : 700,
                                   cursor: 'pointer',
-                                  border: isCurrentStep
-                                    ? status === '진행중'
-                                      ? '2px solid #2563eb'
-                                      : '2px solid #d97706'
-                                    : status === '완료'
-                                    ? '1px solid #86efac'
-                                    : '1px solid #cbd5e1',
-                                  backgroundColor: status === '완료'
-                                    ? '#dcfce7'
-                                    : isCurrentStep
-                                    ? status === '진행중'
-                                      ? '#2563eb'
-                                      : '#d97706'
-                                    : '#ffffff',
-                                  color: status === '완료'
-                                    ? '#15803d'
-                                    : isCurrentStep
-                                    ? '#ffffff'
-                                    : '#475569',
+                                  border: btnBorder,
+                                  backgroundColor: btnBg,
+                                  color: btnColor,
                                   transition: 'all 0.15s ease',
-                                  boxShadow: isCurrentStep ? '0 2px 8px rgba(0, 0, 0, 0.15)' : 'none',
+                                  boxShadow: (status !== '대기' || isCurrentStep) ? '0 2px 6px rgba(0, 0, 0, 0.12)' : 'none',
                                 }}
                               >
-                                {status === '완료' ? `✓ ${sName}` : isCurrentStep ? `▶ ${sName}` : sName}
+                                {status === '완료' ? `✓ ${sName}` : (isCurrentStep && status === '진행중') ? `▶ ${sName}` : sName}
                               </button>
                             );
                           })}
@@ -1103,30 +1089,9 @@ export default function KioskPage() {
                       </div>
                     )}
 
-                    {/* Right Section: Due Date & Action Button */}
-                    <Stack align="flex-end" justify="space-between" style={{ height: '100%', minWidth: '210px' }} gap="xs">
-                      {/* D-Day & Due Date */}
-                      <Group gap="xs" align="center">
-                        <Badge
-                          size="lg"
-                          variant="filled"
-                          style={{
-                            backgroundColor: dDayInfo.isUrgent ? '#ef4444' : '#2563eb',
-                            color: '#ffffff',
-                            fontSize: '13px',
-                            fontWeight: 900,
-                            padding: '6px 12px',
-                            borderRadius: '6px',
-                          }}
-                        >
-                          {dDayInfo.dDayText}
-                        </Badge>
-                        <Text size="xs" c="gray.6" fw={700}>
-                          납기: {order.dueDate || '미정'}
-                        </Text>
-                      </Group>
-
-                      {/* Right Action Button: Single Large Button in Specific Process Tabs */}
+                    {/* Right Section: Action Button (Req 1: Due Date info removed) */}
+                    <Stack align="flex-end" justify="center" style={{ height: '100%', minWidth: selectedProcess !== '전체' ? '190px' : '160px' }}>
+                      {/* Right Action Button */}
                       {selectedProcess !== '전체' ? (
                         <div style={{ width: '190px', height: '75px' }}>
                           {isWaiting ? (

@@ -29,6 +29,12 @@ const DEFAULT_STATIONS = [
   '4번 키오스크 (조립/출고)',
 ];
 
+const STUN_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+];
+
 interface KioskScreenShareModalProps {
   opened: boolean;
   onClose: () => void;
@@ -43,6 +49,7 @@ export default function KioskScreenShareModal({ opened, onClose }: KioskScreenSh
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<any>(null);
+  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
   // Subscribe to Supabase Realtime Presence & Broadcast Signaling
   useEffect(() => {
@@ -74,20 +81,32 @@ export default function KioskScreenShareModal({ opened, onClose }: KioskScreenSh
     channelRef.current = signalingChannel;
 
     signalingChannel
-      .on('broadcast', { event: 'signal_answer' }, (payload: any) => {
+      .on('broadcast', { event: 'signal_answer' }, async (payload: any) => {
         if (payload?.payload?.targetStationId === activeStation && pcRef.current) {
-          const answer = new RTCSessionDescription(payload.payload.answer);
-          pcRef.current.setRemoteDescription(answer).catch((err) => {
+          try {
+            const answer = new RTCSessionDescription(payload.payload.answer);
+            await pcRef.current.setRemoteDescription(answer);
+
+            // Process queued candidates
+            while (pendingIceCandidatesRef.current.length > 0) {
+              const cand = pendingIceCandidatesRef.current.shift();
+              if (cand) {
+                await pcRef.current.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+              }
+            }
+          } catch (err) {
             console.error('Failed to set remote description on answer:', err);
-          });
+          }
         }
       })
-      .on('broadcast', { event: 'signal_ice' }, (payload: any) => {
-        if (payload?.payload?.targetStationId === activeStation && pcRef.current && payload?.payload?.candidate) {
-          const candidate = new RTCIceCandidate(payload.payload.candidate);
-          pcRef.current.addIceCandidate(candidate).catch((err) => {
-            console.error('Failed to add ICE candidate:', err);
-          });
+      .on('broadcast', { event: 'signal_ice' }, async (payload: any) => {
+        if (payload?.payload?.targetStationId === activeStation && payload?.payload?.candidate) {
+          const cand = payload.payload.candidate;
+          if (pcRef.current && pcRef.current.remoteDescription) {
+            await pcRef.current.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+          } else {
+            pendingIceCandidatesRef.current.push(cand);
+          }
         }
       })
       .subscribe();
@@ -118,6 +137,7 @@ export default function KioskScreenShareModal({ opened, onClose }: KioskScreenSh
       pcRef.current = null;
     }
 
+    pendingIceCandidatesRef.current = [];
     setIsSharing(false);
     setActiveStation(null);
     setErrorMessage(null);
@@ -126,6 +146,8 @@ export default function KioskScreenShareModal({ opened, onClose }: KioskScreenSh
   // Start Screen Sharing to target kiosk station
   const startScreenShare = async (stationId: string) => {
     setErrorMessage(null);
+    pendingIceCandidatesRef.current = [];
+
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
         throw new Error('이 브라우저는 화면 공유 API(getDisplayMedia)를 지원하지 않습니다.');
@@ -146,9 +168,9 @@ export default function KioskScreenShareModal({ opened, onClose }: KioskScreenSh
         stopScreenShare();
       };
 
-      // 2. Create WebRTC Peer Connection (STUN Server)
+      // 2. Create WebRTC Peer Connection with STUN Servers
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        iceServers: STUN_SERVERS,
       });
       pcRef.current = pc;
 

@@ -124,6 +124,12 @@ function getDDayInfo(dueDateStr: string | null | undefined): { dDayText: string;
   }
 }
 
+const STUN_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+];
+
 export default function KioskPage() {
   const { isAuthenticated, openAuthModal } = useAuth();
   const router = useRouter();
@@ -139,6 +145,7 @@ export default function KioskPage() {
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const signalingChannelRef = useRef<any>(null);
+  const pendingKioskIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
   // Step Action Confirmation Modal State
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
@@ -245,7 +252,7 @@ export default function KioskPage() {
     };
   }, [mutateOrders]);
 
-  // Supabase Realtime Presence & WebRTC Receiver Signal Listener (Requirement 2)
+  // Supabase Realtime Presence & WebRTC Receiver Signal Listener (Requirement 2 & Bug Fix)
   useEffect(() => {
     if (!supabase || !stationId) return;
 
@@ -272,16 +279,18 @@ export default function KioskPage() {
         const data = payload?.payload;
         if (data?.targetStationId === stationId && data?.offer) {
           try {
+            pendingKioskIceCandidatesRef.current = [];
+
             const pc = new RTCPeerConnection({
-              iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+              iceServers: STUN_SERVERS,
             });
             peerConnectionRef.current = pc;
 
             pc.ontrack = (event) => {
-              if (event.streams && event.streams[0]) {
-                setIncomingStream(event.streams[0]);
-                setRemoteShareModalOpen(true);
-              }
+              console.log('Kiosk WebRTC ontrack event received:', event);
+              const stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
+              setIncomingStream(stream);
+              setRemoteShareModalOpen(true);
             };
 
             pc.onicecandidate = (event) => {
@@ -299,6 +308,15 @@ export default function KioskPage() {
             };
 
             await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+            // Process queued candidates
+            while (pendingKioskIceCandidatesRef.current.length > 0) {
+              const cand = pendingKioskIceCandidatesRef.current.shift();
+              if (cand) {
+                await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+              }
+            }
+
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
 
@@ -318,11 +336,12 @@ export default function KioskPage() {
       })
       .on('broadcast', { event: 'signal_ice' }, async (payload: any) => {
         const data = payload?.payload;
-        if (data?.targetStationId === stationId && peerConnectionRef.current && data?.candidate) {
-          try {
-            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-          } catch (e) {
-            console.error('Kiosk ICE candidate error:', e);
+        if (data?.targetStationId === stationId && data?.candidate) {
+          const cand = data.candidate;
+          if (peerConnectionRef.current && peerConnectionRef.current.remoteDescription) {
+            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+          } else {
+            pendingKioskIceCandidatesRef.current.push(cand);
           }
         }
       })
@@ -340,10 +359,13 @@ export default function KioskPage() {
     };
   }, [stationId]);
 
-  // Attach incoming video stream to video ref when modal opens
+  // Attach incoming video stream & invoke .play() with muted bypass (Bug Fix 1)
   useEffect(() => {
     if (incomingStream && videoRef.current) {
       videoRef.current.srcObject = incomingStream;
+      videoRef.current.play().catch((err) => {
+        console.warn('Autoplay error on video play:', err);
+      });
     }
   }, [incomingStream, remoteShareModalOpen]);
 
@@ -352,6 +374,7 @@ export default function KioskPage() {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
+    pendingKioskIceCandidatesRef.current = [];
     setIncomingStream(null);
     setRemoteShareModalOpen(false);
   };
@@ -1179,6 +1202,7 @@ export default function KioskPage() {
             ref={videoRef}
             autoPlay
             playsInline
+            muted
             controls
             style={{
               width: '100%',

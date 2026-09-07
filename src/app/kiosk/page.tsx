@@ -777,7 +777,7 @@ export default function KioskPage() {
               gap: '6px',
             }}
           >
-            <IconBuildingFactory2 size={24} /> TASS 🏭 현장 키오스크
+            TASS 현장 키오스크
           </div>
 
           {/* Station Selector Badge (Requirement 2) */}
@@ -824,10 +824,9 @@ export default function KioskPage() {
             color="indigo"
             size="md"
             onClick={() => setCalendarModalOpen(true)}
-            leftSection={<IconCalendar size={20} />}
             style={{ height: '48px', fontWeight: 800 }}
           >
-            📅 납기 캘린더
+            납기 캘린더
           </Button>
 
           {/* Switch to Admin Mode Button */}
@@ -836,7 +835,6 @@ export default function KioskPage() {
             size="md"
             radius="md"
             onClick={handleSwitchToAdmin}
-            leftSection={<IconBuilding size={20} />}
             style={{
               height: '52px',
               fontSize: '16px',
@@ -845,7 +843,7 @@ export default function KioskPage() {
               boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)',
             }}
           >
-            🏢 관리자 화면으로 전환
+            관리자 화면으로 전환
           </Button>
         </Group>
       </header>
@@ -1046,9 +1044,9 @@ export default function KioskPage() {
                             let btnBorder = '1px solid #cbd5e1';
 
                             if (status === '완료') {
-                              btnBg = '#16a34a';
-                              btnColor = '#ffffff';
-                              btnBorder = '1px solid #16a34a';
+                              btnBg = '#e2e8f0';
+                              btnColor = '#475569';
+                              btnBorder = '1px solid #cbd5e1';
                             } else if (status === '진행중') {
                               btnBg = '#2563eb';
                               btnColor = '#ffffff';
@@ -1114,7 +1112,7 @@ export default function KioskPage() {
                             </Button>
                           ) : (
                             <Button
-                              color="green"
+                              color="gray"
                               fullWidth
                               onClick={() => handleActionClick(order, step)}
                               leftSection={<IconCheck size={28} />}
@@ -1124,8 +1122,8 @@ export default function KioskPage() {
                                 fontSize: '22px',
                                 fontWeight: 900,
                                 borderRadius: '12px',
-                                backgroundColor: '#16a34a',
-                                boxShadow: '0 4px 14px rgba(22, 163, 74, 0.35)',
+                                backgroundColor: '#64748b',
+                                boxShadow: '0 4px 14px rgba(100, 116, 139, 0.35)',
                               }}
                             >
                               ✓ 완료 처리
@@ -1147,12 +1145,12 @@ export default function KioskPage() {
                             </Button>
                           ) : (
                             <Button
-                              color="green"
+                              color="gray"
                               size="md"
                               fullWidth
                               onClick={() => handleActionClick(order, step)}
                               leftSection={<IconCheck size={20} />}
-                              style={{ fontWeight: 900, height: '48px' }}
+                              style={{ fontWeight: 900, height: '48px', backgroundColor: '#64748b' }}
                             >
                               ✓ 완료 처리
                             </Button>
@@ -1544,7 +1542,7 @@ export default function KioskPage() {
                   [프로젝트] <span style={{ color: '#d97706', fontSize: '16px', fontFamily: 'monospace', fontWeight: 900 }}>{targetWork.order.projectNo || `PRJ-${String(targetWork.order.id).padStart(3, '0')}`}</span>
                 </Text>
                 <Text size="sm" c="dimmed" fw={700}>
-                  [대상 공정] <Badge size="lg" color={targetWork.actionType === 'START' ? 'blue' : 'green'}>{targetWork.step.name}</Badge> ({targetWork.step.status} ➔ {targetWork.actionType === 'START' ? '진행중' : '완료'})
+                  [대상 공정] <Badge size="lg" color={targetWork.actionType === 'START' ? 'blue' : 'gray'}>{targetWork.step.name}</Badge> ({targetWork.step.status} ➔ {targetWork.actionType === 'START' ? '진행중' : '완료'})
                 </Text>
               </Stack>
             </Paper>
@@ -1568,7 +1566,7 @@ export default function KioskPage() {
               </Button>
 
               <Button
-                color={targetWork.actionType === 'START' ? 'blue' : 'green'}
+                color={targetWork.actionType === 'START' ? 'blue' : 'gray'}
                 size="lg"
                 onClick={executeStatusChange}
                 loading={isUpdating}
@@ -1576,7 +1574,7 @@ export default function KioskPage() {
                   height: '64px',
                   fontSize: '20px',
                   fontWeight: 900,
-                  backgroundColor: targetWork.actionType === 'START' ? '#2563eb' : '#16a34a',
+                  backgroundColor: targetWork.actionType === 'START' ? '#2563eb' : '#64748b',
                 }}
               >
                 {targetWork.actionType === 'START' ? '▶ 시작 확정' : '✓ 완료 확정'}

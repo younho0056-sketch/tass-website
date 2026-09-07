@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 import { notifications } from '@mantine/notifications';
 import {
@@ -10,23 +10,24 @@ import {
   Text,
   Badge,
   Modal,
-  Card,
   Paper,
   Loader,
   Center,
-  Alert,
-  Title
+  Title,
+  Card,
+  SimpleGrid
 } from '@mantine/core';
 import {
   IconBuildingFactory2,
   IconBuilding,
   IconCheck,
   IconPlayerPlay,
-  IconAlertTriangle,
   IconRefresh,
   IconLock,
   IconClock,
-  IconChevronRight
+  IconPhone,
+  IconMail,
+  IconPrinter
 } from '@tabler/icons-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -56,6 +57,20 @@ export type Order = {
   progressPercent: number;
   memo: string | null;
   createdAt: string;
+};
+
+export type PartnerDetail = {
+  id: number;
+  type: string;
+  name: string;
+  manager: string | null;
+  email: string | null;
+  phone: string | null;
+  tel: string | null;
+  fax: string | null;
+  specialty: string;
+  address: string | null;
+  memo: string | null;
 };
 
 const PROCESS_TABS = ['전체', '설계', '절단', '가공', '용접', '도장', '조립'];
@@ -99,7 +114,7 @@ export default function KioskPage() {
   const [selectedProcess, setSelectedProcess] = useState<string>('전체');
   const [currentTime, setCurrentTime] = useState<string>('');
 
-  // Confirmation Modal State
+  // Step Action Confirmation Modal State
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [targetWork, setTargetWork] = useState<{
     order: Order;
@@ -108,13 +123,28 @@ export default function KioskPage() {
   } | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // Partner Detail Modal State
+  const [partnerModalOpen, setPartnerModalOpen] = useState(false);
+  const [selectedPartnerDetail, setSelectedPartnerDetail] = useState<PartnerDetail | null>(null);
+  const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
+
+  // Print State
+  const [printInvoicePartner, setPrintInvoicePartner] = useState<PartnerDetail | null>(null);
+  const [printInvoiceOrder, setPrintInvoiceOrder] = useState<Order | null>(null);
+
   // SWR polling with 10s automatic revalidation
   const { data: ordersData, mutate: mutateOrders, isLoading } = useSWR('/api/orders', fetcher, {
     refreshInterval: 10000,
     revalidateOnFocus: true,
   });
 
+  const { data: partnersData } = useSWR('/api/partners', fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 10000,
+  });
+
   const orders: Order[] = useMemo(() => ordersData?.orders || [], [ordersData]);
+  const partners: PartnerDetail[] = useMemo(() => Array.isArray(partnersData) ? partnersData : [], [partnersData]);
 
   // Realtime Clock Update
   useEffect(() => {
@@ -160,13 +190,11 @@ export default function KioskPage() {
     const list: { order: Order; step: ProcessStep }[] = [];
 
     orders.forEach((o) => {
-      // Exclude completely finished orders
       if (o.status === '완료') return;
 
       const activeSteps = (o.steps || []).filter((s) => s.active);
 
       activeSteps.forEach((step) => {
-        // We only care about pending ('대기') or in-progress ('진행중') work steps
         if (step.status === '대기' || step.status === '진행중') {
           if (selectedProcess === '전체' || step.name === selectedProcess) {
             list.push({ order: o, step });
@@ -214,6 +242,39 @@ export default function KioskPage() {
     return counts;
   }, [orders]);
 
+  // Open Partner Detail Modal (Requirement 4)
+  const handleOpenPartnerDetail = (partnerName: string, order: Order) => {
+    setSelectedOrderForInvoice(order);
+    const found = partners.find(p => p.name === partnerName);
+    if (found) {
+      setSelectedPartnerDetail(found);
+    } else {
+      setSelectedPartnerDetail({
+        id: 0,
+        name: partnerName,
+        type: '매출처',
+        manager: null,
+        email: null,
+        phone: null,
+        tel: null,
+        fax: null,
+        specialty: '',
+        address: null,
+        memo: null,
+      });
+    }
+    setPartnerModalOpen(true);
+  };
+
+  // Handle Invoice Print
+  const handlePrintPartnerInvoice = (partner: PartnerDetail, order: Order | null) => {
+    setPrintInvoicePartner(partner);
+    setPrintInvoiceOrder(order);
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
   // Handle touch action click
   const handleActionClick = (order: Order, step: ProcessStep) => {
     const actionType: 'START' | 'COMPLETE' = step.status === '대기' ? 'START' : 'COMPLETE';
@@ -228,7 +289,6 @@ export default function KioskPage() {
     setIsUpdating(true);
 
     const nowStr = new Date().toISOString().split('T')[0];
-
     const nextStatus: '진행중' | '완료' = actionType === 'START' ? '진행중' : '완료';
 
     const updatedSteps: ProcessStep[] = (order.steps || []).map((s) => {
@@ -312,18 +372,19 @@ export default function KioskPage() {
     }
   };
 
-  // Switch to Admin View
   const handleSwitchToAdmin = () => {
     router.push('/orders');
   };
+
+  const todayStr = new Date().toISOString().split('T')[0];
 
   if (!isAuthenticated) {
     return (
       <div
         style={{
           minHeight: '100vh',
-          backgroundColor: '#0f172a',
-          color: '#ffffff',
+          backgroundColor: '#f8fafc',
+          color: '#0f172a',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -336,8 +397,9 @@ export default function KioskPage() {
           style={{
             maxWidth: 520,
             width: '100%',
-            backgroundColor: '#1e293b',
-            border: '2px solid #334155',
+            backgroundColor: '#ffffff',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.08)',
             textAlign: 'center',
           }}
         >
@@ -347,21 +409,20 @@ export default function KioskPage() {
                 width: 90,
                 height: 90,
                 borderRadius: '50%',
-                backgroundColor: '#2563eb',
+                backgroundColor: '#eff6ff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 25px rgba(37, 99, 235, 0.5)',
               }}
             >
-              <IconLock size={48} color="#ffffff" />
+              <IconLock size={48} color="#2563eb" />
             </div>
 
             <Stack gap="xs">
-              <Title order={1} style={{ fontSize: '28px', color: '#ffffff', fontWeight: 900 }}>
+              <Title order={1} style={{ fontSize: '28px', color: '#0f172a', fontWeight: 900 }}>
                 TASS 현장 키오스크 모드
               </Title>
-              <Text size="md" c="gray.4" fw={600}>
+              <Text size="md" c="gray.6" fw={600}>
                 공장 현장 작업을 위해 비밀번호(PIN) 인증이 필요합니다.
               </Text>
             </Stack>
@@ -377,7 +438,7 @@ export default function KioskPage() {
                 fontSize: '22px',
                 fontWeight: 900,
                 letterSpacing: '1px',
-                boxShadow: '0 4px 15px rgba(37, 99, 235, 0.4)',
+                boxShadow: '0 4px 15px rgba(37, 99, 235, 0.25)',
               }}
             >
               🔒 PIN 번호 입력하여 접속
@@ -392,18 +453,19 @@ export default function KioskPage() {
     <div
       style={{
         minHeight: '100vh',
-        backgroundColor: '#090d16',
-        color: '#f8fafc',
+        backgroundColor: '#f8fafc',
+        color: '#0f172a',
         display: 'flex',
         flexDirection: 'column',
         userSelect: 'none',
       }}
     >
-      {/* 1. Header Bar */}
+      {/* 1. Header Bar (Requirement 1: White/Black High Contrast) */}
       <header
+        className="print:hidden"
         style={{
-          backgroundColor: '#0f172a',
-          borderBottom: '2px solid #1e293b',
+          backgroundColor: '#ffffff',
+          borderBottom: '1px solid #e2e8f0',
           padding: '12px 24px',
           display: 'flex',
           alignItems: 'center',
@@ -413,6 +475,7 @@ export default function KioskPage() {
           position: 'sticky',
           top: 0,
           zIndex: 100,
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
         }}
       >
         <Group gap="md" align="center">
@@ -434,11 +497,11 @@ export default function KioskPage() {
           </div>
 
           <Group gap="xs" visibleFrom="sm">
-            <Badge color="green" variant="dot" size="lg" style={{ fontSize: '13px', fontWeight: 700 }}>
+            <Badge color="teal" variant="light" size="lg" style={{ fontSize: '13px', fontWeight: 700 }}>
               🟢 실시간 DB 동기화 중
             </Badge>
             {currentTime && (
-              <Group gap={4} style={{ color: '#94a3b8', fontSize: '14px', fontWeight: 600 }}>
+              <Group gap={4} style={{ color: '#64748b', fontSize: '14px', fontWeight: 600 }}>
                 <IconClock size={16} />
                 <span>{currentTime}</span>
               </Group>
@@ -449,7 +512,7 @@ export default function KioskPage() {
         <Group gap="sm">
           <Button
             variant="light"
-            color="blue"
+            color="gray"
             size="md"
             onClick={() => mutateOrders && mutateOrders()}
             leftSection={<IconRefresh size={18} />}
@@ -458,9 +521,9 @@ export default function KioskPage() {
             새로고침
           </Button>
 
-          {/* Switch to Admin Mode Button (Requirement 1) */}
+          {/* Switch to Admin Mode Button (Requirement 1 & 4) */}
           <Button
-            color="indigo"
+            color="blue"
             size="md"
             radius="md"
             onClick={handleSwitchToAdmin}
@@ -469,8 +532,8 @@ export default function KioskPage() {
               height: '52px',
               fontSize: '16px',
               fontWeight: 900,
-              backgroundColor: '#3b82f6',
-              boxShadow: '0 2px 10px rgba(59, 130, 246, 0.3)',
+              backgroundColor: '#2563eb',
+              boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)',
             }}
           >
             🏢 관리자 화면으로 전환
@@ -478,11 +541,12 @@ export default function KioskPage() {
         </Group>
       </header>
 
-      {/* 2. Top Large Process Filter Tabs (Requirement 2: min height >= 60px) */}
+      {/* 2. Top Process Filter Tabs (Requirement 1 & 2: 64px Large Touch Tabs) */}
       <nav
+        className="print:hidden"
         style={{
-          backgroundColor: '#0f172a',
-          borderBottom: '2px solid #1e293b',
+          backgroundColor: '#ffffff',
+          borderBottom: '1px solid #e2e8f0',
           padding: '12px 20px',
           overflowX: 'auto',
         }}
@@ -500,9 +564,9 @@ export default function KioskPage() {
                   height: '64px',
                   padding: '0 24px',
                   borderRadius: '12px',
-                  border: isSelected ? '3px solid #60a5fa' : '2px solid #334155',
-                  backgroundColor: isSelected ? '#2563eb' : '#1e293b',
-                  color: '#ffffff',
+                  border: isSelected ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                  backgroundColor: isSelected ? '#2563eb' : '#ffffff',
+                  color: isSelected ? '#ffffff' : '#0f172a',
                   fontSize: '20px',
                   fontWeight: 900,
                   cursor: 'pointer',
@@ -511,15 +575,15 @@ export default function KioskPage() {
                   gap: '10px',
                   transition: 'all 0.15s ease-in-out',
                   boxShadow: isSelected
-                    ? '0 4px 18px rgba(37, 99, 235, 0.45)'
-                    : 'none',
+                    ? '0 4px 14px rgba(37, 99, 235, 0.3)'
+                    : '0 1px 3px rgba(0, 0, 0, 0.03)',
                 }}
               >
                 <span>{tab}</span>
                 <span
                   style={{
-                    backgroundColor: isSelected ? '#ffffff' : '#334155',
-                    color: isSelected ? '#1e3a8a' : '#cbd5e1',
+                    backgroundColor: isSelected ? '#ffffff' : '#f1f5f9',
+                    color: isSelected ? '#1e40af' : '#475569',
                     padding: '2px 10px',
                     borderRadius: '20px',
                     fontSize: '16px',
@@ -534,13 +598,13 @@ export default function KioskPage() {
         </Group>
       </nav>
 
-      {/* 3. Main Content: Large Card List */}
-      <main style={{ flex: 1, padding: '20px', maxWidth: '1400px', width: '100%', margin: '0 auto' }}>
+      {/* 3. Main Content: Work Card List (Requirement 1, 2, 3: Fixed Height 140px, White/Black Theme) */}
+      <main className="print:hidden" style={{ flex: 1, padding: '20px', maxWidth: '1400px', width: '100%', margin: '0 auto' }}>
         {isLoading && workList.length === 0 ? (
           <Center style={{ minHeight: '350px' }}>
             <Stack align="center" gap="md">
               <Loader size="xl" color="blue" />
-              <Text size="lg" c="gray.4" fw={700}>
+              <Text size="lg" c="gray.6" fw={700}>
                 현장 작업 데이터를 불러오는 중입니다...
               </Text>
             </Stack>
@@ -551,19 +615,20 @@ export default function KioskPage() {
               p="2xl"
               radius="xl"
               style={{
-                backgroundColor: '#1e293b',
-                border: '2px solid #334155',
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
                 textAlign: 'center',
                 maxWidth: 600,
                 width: '100%',
               }}
             >
               <Stack align="center" gap="md">
-                <IconCheck size={64} color="#10b981" />
-                <Title order={2} style={{ color: '#ffffff', fontWeight: 900 }}>
+                <IconCheck size={64} color="#16a34a" />
+                <Title order={2} style={{ color: '#0f172a', fontWeight: 900 }}>
                   '{selectedProcess}' 공정 대기/진행 작업 완료!
                 </Title>
-                <Text size="md" c="gray.4" fw={600}>
+                <Text size="md" c="gray.6" fw={600}>
                   현재 처리할 작업 카드가 없습니다. 상단 공정 탭을 클릭하여 다른 작업을 확인하세요.
                 </Text>
               </Stack>
@@ -579,141 +644,166 @@ export default function KioskPage() {
               return (
                 <Paper
                   key={`${order.id}-${step.name}`}
-                  p="lg"
+                  p="md"
                   radius="lg"
                   style={{
-                    backgroundColor: '#1e293b',
-                    border: dDayInfo.isUrgent
-                      ? '3px solid #ef4444'
-                      : isWaiting
-                      ? '2px solid #334155'
-                      : '3px solid #22c55e',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
-                    transition: 'all 0.15s ease',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+                    minHeight: '140px',
+                    height: '140px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden',
                   }}
                 >
-                  <Group justify="space-between" align="center" wrap="wrap" gap="md">
-                    {/* Left Info Column (Large, bold, high-contrast text) */}
-                    <Stack gap="xs" style={{ flex: 1, minWidth: '280px' }}>
+                  <Group justify="space-between" align="center" wrap="nowrap" style={{ width: '100%', height: '100%' }}>
+                    {/* Left Info Column (Requirement 1, 2, 4: Clean grid layout & Clickable Partner Name) */}
+                    <Stack justify="space-between" style={{ flex: 1, height: '100%', minWidth: 0, paddingRight: '16px' }}>
                       {/* Top Row: Badges & D-Day */}
-                      <Group gap="sm" wrap="wrap" align="center">
+                      <Group gap="xs" wrap="nowrap" align="center">
                         {/* Project Number */}
                         <Badge
-                          size="xl"
+                          size="lg"
                           variant="filled"
-                          color="dark"
                           style={{
-                            backgroundColor: '#0f172a',
-                            border: '1px solid #475569',
-                            fontSize: '16px',
+                            backgroundColor: '#f1f5f9',
+                            color: '#0f172a',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '15px',
                             fontFamily: 'monospace',
                             fontWeight: 900,
-                            padding: '12px 14px',
-                            borderRadius: '8px',
+                            padding: '10px 12px',
+                            borderRadius: '6px',
                           }}
                         >
                           {displayProjectNo}
                         </Badge>
 
-                        {/* Process Step & Status Badge */}
+                        {/* Process Step Badge */}
                         <Badge
-                          size="xl"
+                          size="lg"
                           variant="filled"
-                          color={isWaiting ? 'amber' : 'green'}
                           style={{
-                            fontSize: '18px',
+                            fontSize: '15px',
                             fontWeight: 900,
-                            padding: '12px 16px',
-                            borderRadius: '8px',
+                            padding: '10px 14px',
+                            borderRadius: '6px',
                             backgroundColor: isWaiting ? '#d97706' : '#16a34a',
+                            color: '#ffffff',
                           }}
                         >
                           {step.name} ({step.status})
                         </Badge>
 
-                        {/* D-Day Highlight Badge (Requirement 2) */}
+                        {/* D-Day Highlight Badge */}
                         <Badge
-                          size="xl"
+                          size="lg"
                           variant="filled"
                           style={{
-                            backgroundColor: dDayInfo.isUrgent ? '#ef4444' : '#0284c7',
+                            backgroundColor: dDayInfo.isUrgent ? '#ef4444' : '#2563eb',
                             color: '#ffffff',
-                            fontSize: '16px',
+                            fontSize: '14px',
                             fontWeight: 900,
-                            padding: '12px 16px',
-                            borderRadius: '8px',
-                            boxShadow: dDayInfo.isUrgent ? '0 0 12px rgba(239, 68, 68, 0.6)' : 'none',
+                            padding: '10px 14px',
+                            borderRadius: '6px',
+                            boxShadow: dDayInfo.isUrgent ? '0 0 10px rgba(239, 68, 68, 0.4)' : 'none',
                           }}
                         >
                           {dDayInfo.dDayText}
                         </Badge>
+
+                        <Text size="xs" c="gray.6" fw={600} style={{ marginLeft: 'auto' }}>
+                          📅 납기일: {order.dueDate || '미정'}
+                        </Text>
                       </Group>
 
-                      {/* Main Title: Customer Name (거래처명 - 24px+ Bold) */}
-                      <Text
-                        style={{
-                          fontSize: '26px',
-                          fontWeight: 900,
-                          color: '#38bdf8',
-                          lineHeight: 1.2,
-                        }}
-                      >
-                        {order.partnerName}
-                      </Text>
+                      {/* Middle Row: Clickable Partner Name (Requirement 4: Opens Partner Detail Modal) */}
+                      <Group gap="xs" align="center" wrap="nowrap" style={{ minWidth: 0 }}>
+                        <Text
+                          onClick={() => handleOpenPartnerDetail(order.partnerName, order)}
+                          title="거래처 상세 정보 및 명세표 출력 보기"
+                          style={{
+                            fontSize: '24px',
+                            fontWeight: 900,
+                            color: '#2563eb',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            textUnderlineOffset: '4px',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            transition: 'color 0.15s ease',
+                          }}
+                        >
+                          {order.partnerName}
+                        </Text>
+                        <Text size="xs" c="dimmed" fw={600}>
+                          (클릭 시 상세 정보)
+                        </Text>
+                      </Group>
 
-                      {/* Item Name & Quantity (품목명 및 수량 - 22px+ Bold) */}
-                      <Text
-                        style={{
-                          fontSize: '22px',
-                          fontWeight: 800,
-                          color: '#f8fafc',
-                          lineHeight: 1.3,
-                        }}
-                      >
-                        {order.itemName} <span style={{ color: '#f59e0b' }}>- {order.quantity}개</span>
-                      </Text>
+                      {/* Bottom Row: Item Name & Quantity */}
+                      <Group justify="space-between" align="center" wrap="nowrap">
+                        <Text
+                          style={{
+                            fontSize: '20px',
+                            fontWeight: 800,
+                            color: '#0f172a',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {order.itemName} <span style={{ color: '#d97706', fontWeight: 900 }}>- {order.quantity}개</span>
+                        </Text>
 
-                      {/* Due Date & Memo */}
-                      <Group gap="lg" style={{ fontSize: '15px', color: '#94a3b8', fontWeight: 600 }}>
-                        <span>📅 납기일: {order.dueDate || '미정'}</span>
-                        {order.memo && <span>📝 메모: {order.memo}</span>}
+                        {order.memo && (
+                          <Text size="xs" c="red.7" fw={700} truncate style={{ maxWidth: '280px' }}>
+                            📝 {order.memo}
+                          </Text>
+                        )}
                       </Group>
                     </Stack>
 
-                    {/* Right Touch Action Button (Requirement 2: Min height >= 60px) */}
-                    <div style={{ minWidth: '180px', width: '100%', maxWidth: '240px' }}>
+                    {/* Right Touch Action Button (Requirement 3: Enlarged Touch Target Width 190px, Height 80px) */}
+                    <div style={{ width: '190px', minWidth: '190px', height: '80px' }}>
                       {isWaiting ? (
-                        /* Blue Button [ ▶ 시작 ] */
+                        /* Blue Button [ ▶ 시작 ] (Requirement 3) */
                         <Button
                           color="blue"
                           fullWidth
                           onClick={() => handleActionClick(order, step)}
-                          leftSection={<IconPlayerPlay size={26} />}
+                          leftSection={<IconPlayerPlay size={28} />}
                           style={{
-                            height: '68px',
+                            height: '80px',
+                            width: '190px',
                             fontSize: '22px',
                             fontWeight: 900,
                             borderRadius: '12px',
                             backgroundColor: '#2563eb',
-                            boxShadow: '0 4px 15px rgba(37, 99, 235, 0.4)',
+                            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
                           }}
                         >
                           ▶ 시작
                         </Button>
                       ) : (
-                        /* Green Button [ ✓ 완료 처리 ] */
+                        /* Green Button [ ✓ 완료 처리 ] (Requirement 3) */
                         <Button
                           color="green"
                           fullWidth
                           onClick={() => handleActionClick(order, step)}
-                          leftSection={<IconCheck size={28} />}
+                          leftSection={<IconCheck size={30} />}
                           style={{
-                            height: '68px',
+                            height: '80px',
+                            width: '190px',
                             fontSize: '22px',
                             fontWeight: 900,
                             borderRadius: '12px',
                             backgroundColor: '#16a34a',
-                            boxShadow: '0 4px 15px rgba(22, 163, 74, 0.4)',
+                            boxShadow: '0 4px 14px rgba(22, 163, 74, 0.35)',
                           }}
                         >
                           ✓ 완료 처리
@@ -728,12 +818,146 @@ export default function KioskPage() {
         )}
       </main>
 
-      {/* 4. Touch Confirmation Popup Modal (Requirement 2) */}
+      {/* 4. Partner Detail Modal (Requirement 4) */}
+      <Modal
+        opened={partnerModalOpen}
+        onClose={() => setPartnerModalOpen(false)}
+        title={
+          <Text fw={900} size="lg" c="dark">
+            [거래처 상세 정보] {selectedPartnerDetail?.name || ''}
+          </Text>
+        }
+        size="lg"
+        centered
+        radius="lg"
+        styles={{
+          content: { backgroundColor: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' },
+          header: { backgroundColor: '#ffffff', borderBottom: '1px solid #f1f5f9' },
+        }}
+      >
+        {selectedPartnerDetail && (
+          <Card padding="lg" radius="md" style={{ border: '1px solid #cbd5e1', backgroundColor: '#f8fafc' }}>
+            <Stack gap="sm">
+              <Group justify="space-between">
+                <Text fw={900} size="xl" c="blue.8">{selectedPartnerDetail.name}</Text>
+                <Badge color={selectedPartnerDetail.type === '매입처' ? 'red' : selectedPartnerDetail.type === '협력사' ? 'grape' : 'green'} size="lg">
+                  {selectedPartnerDetail.type}
+                </Badge>
+              </Group>
+
+              {selectedPartnerDetail.specialty && (
+                <Group gap={4}>
+                  <Text size="xs" fw={700} c="dimmed">분야:</Text>
+                  {selectedPartnerDetail.specialty.split(',').filter(Boolean).map((s) => (
+                    <Badge key={s} size="sm" variant="outline">{s}</Badge>
+                  ))}
+                </Group>
+              )}
+
+              <SimpleGrid cols={2} spacing="xs" mt="sm">
+                <div>
+                  <Text size="xs" c="dimmed" fw={700}>담당자</Text>
+                  <Text fw={700}>{selectedPartnerDetail.manager || '-'}</Text>
+                </div>
+                <div>
+                  <Text size="xs" c="dimmed" fw={700}>팩스 번호</Text>
+                  <Text fw={700}>{selectedPartnerDetail.fax || '-'}</Text>
+                </div>
+                <div>
+                  <Text size="xs" c="dimmed" fw={700}>휴대폰</Text>
+                  <Text fw={700}>{selectedPartnerDetail.phone || '-'}</Text>
+                </div>
+                <div>
+                  <Text size="xs" c="dimmed" fw={700}>회사 전화</Text>
+                  <Text fw={700}>{selectedPartnerDetail.tel || '-'}</Text>
+                </div>
+              </SimpleGrid>
+
+              <div>
+                <Text size="xs" c="dimmed" fw={700}>이메일</Text>
+                <Text fw={700}>{selectedPartnerDetail.email || '-'}</Text>
+              </div>
+
+              <div>
+                <Text size="xs" c="dimmed" fw={700}>주소</Text>
+                <Text fw={700}>{selectedPartnerDetail.address || '-'}</Text>
+              </div>
+
+              {selectedPartnerDetail.memo && (
+                <div>
+                  <Text size="xs" c="dimmed" fw={700}>비고</Text>
+                  <Text size="sm" fw={600}>{selectedPartnerDetail.memo}</Text>
+                </div>
+              )}
+
+              {selectedOrderForInvoice && (
+                <Group gap="xs" p="xs" style={{ backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+                  <Badge color="blue" size="sm">선택 수주 품목 지정됨</Badge>
+                  <Text size="xs" fw={700} c="blue.9">
+                    [{selectedOrderForInvoice.projectNo || `PRJ-${String(selectedOrderForInvoice.id).padStart(3, '0')}`}] {selectedOrderForInvoice.itemName} ({selectedOrderForInvoice.quantity}개 / 납기: {selectedOrderForInvoice.dueDate || '-'})
+                  </Text>
+                </Group>
+              )}
+
+              <Group gap="xs" mt="md" wrap="wrap" grow>
+                {selectedPartnerDetail.phone && (
+                  <Button
+                    component="a"
+                    href={`tel:${selectedPartnerDetail.phone}`}
+                    leftSection={<IconPhone size={16} />}
+                    color="blue"
+                    size="md"
+                    style={{ fontWeight: 800 }}
+                  >
+                    휴대폰 연결
+                  </Button>
+                )}
+                {selectedPartnerDetail.tel && (
+                  <Button
+                    component="a"
+                    href={`tel:${selectedPartnerDetail.tel}`}
+                    leftSection={<IconPhone size={16} />}
+                    color="teal"
+                    size="md"
+                    style={{ fontWeight: 800 }}
+                  >
+                    회사전화
+                  </Button>
+                )}
+                {selectedPartnerDetail.email && (
+                  <Button
+                    component="a"
+                    href={`mailto:${selectedPartnerDetail.email}`}
+                    leftSection={<IconMail size={16} />}
+                    color="violet"
+                    size="md"
+                    style={{ fontWeight: 800 }}
+                  >
+                    이메일
+                  </Button>
+                )}
+                {/* Print Invoice Button (Requirement 4) */}
+                <Button
+                  leftSection={<IconPrinter size={18} />}
+                  color="indigo"
+                  size="md"
+                  style={{ fontWeight: 900 }}
+                  onClick={() => handlePrintPartnerInvoice(selectedPartnerDetail, selectedOrderForInvoice)}
+                >
+                  {selectedOrderForInvoice ? '선택 품목 명세서 출력' : '전체 품목 명세서 출력'}
+                </Button>
+              </Group>
+            </Stack>
+          </Card>
+        )}
+      </Modal>
+
+      {/* 5. Step Confirmation Popup Modal */}
       <Modal
         opened={confirmModalOpen}
         onClose={() => !isUpdating && setConfirmModalOpen(false)}
         title={
-          <Text fw={900} size="xl" c="blue.4">
+          <Text fw={900} size="xl" c="blue.7">
             {targetWork?.actionType === 'START' ? '공정 시작 확인' : '공정 완료 확인'}
           </Text>
         }
@@ -741,22 +965,22 @@ export default function KioskPage() {
         radius="lg"
         size={480}
         styles={{
-          content: { backgroundColor: '#1e293b', color: '#ffffff', border: '2px solid #3b82f6' },
-          header: { backgroundColor: '#1e293b', color: '#ffffff' },
+          content: { backgroundColor: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' },
+          header: { backgroundColor: '#ffffff', borderBottom: '1px solid #f1f5f9' },
         }}
       >
         {targetWork && (
           <Stack gap="lg" py="xs">
-            <Paper p="md" radius="md" style={{ backgroundColor: '#0f172a', border: '1px solid #334155' }}>
+            <Paper p="md" radius="md" style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
               <Stack gap="xs">
                 <Text size="sm" c="dimmed" fw={700}>
-                  [거래처] <span style={{ color: '#38bdf8', fontSize: '18px', fontWeight: 900 }}>{targetWork.order.partnerName}</span>
+                  [거래처] <span style={{ color: '#2563eb', fontSize: '18px', fontWeight: 900 }}>{targetWork.order.partnerName}</span>
                 </Text>
                 <Text size="sm" c="dimmed" fw={700}>
-                  [품목명] <span style={{ color: '#ffffff', fontSize: '18px', fontWeight: 900 }}>{targetWork.order.itemName} ({targetWork.order.quantity}개)</span>
+                  [품목명] <span style={{ color: '#0f172a', fontSize: '18px', fontWeight: 900 }}>{targetWork.order.itemName} ({targetWork.order.quantity}개)</span>
                 </Text>
                 <Text size="sm" c="dimmed" fw={700}>
-                  [프로젝트] <span style={{ color: '#f59e0b', fontSize: '16px', fontFamily: 'monospace', fontWeight: 900 }}>{targetWork.order.projectNo || `PRJ-${String(targetWork.order.id).padStart(3, '0')}`}</span>
+                  [프로젝트] <span style={{ color: '#d97706', fontSize: '16px', fontFamily: 'monospace', fontWeight: 900 }}>{targetWork.order.projectNo || `PRJ-${String(targetWork.order.id).padStart(3, '0')}`}</span>
                 </Text>
                 <Text size="sm" c="dimmed" fw={700}>
                   [대상 공정] <Badge size="lg" color={targetWork.actionType === 'START' ? 'blue' : 'green'}>{targetWork.step.name}</Badge> ({targetWork.step.status} ➔ {targetWork.actionType === 'START' ? '진행중' : '완료'})
@@ -764,7 +988,7 @@ export default function KioskPage() {
               </Stack>
             </Paper>
 
-            <Text ta="center" fw={800} size="lg" c="gray.2">
+            <Text ta="center" fw={800} size="lg" c="gray.8">
               {targetWork.actionType === 'START'
                 ? `'${targetWork.step.name}' 공정을 시작하시겠습니까?`
                 : `'${targetWork.step.name}' 공정을 완료 처리하시겠습니까?`}
@@ -800,6 +1024,85 @@ export default function KioskPage() {
           </Stack>
         )}
       </Modal>
+
+      {/* 6. Printable Shipping Label / Invoice (A4 print view) */}
+      <div className="hidden print:block">
+        {printInvoicePartner && (
+          <div className="print-container">
+            <div className="shipping-label-box" style={{ width: '170mm', margin: 'auto', border: '2px solid #000', padding: '8mm', backgroundColor: '#fff', color: '#000' }}>
+              <div style={{ textAlign: 'center', borderBottom: '2px dashed #000', paddingBottom: '4mm', marginBottom: '4mm' }}>
+                <h2 style={{ fontSize: '18pt', fontWeight: 900, margin: 0, letterSpacing: '2px' }}>TASS 거래명세표 및 운송장 (INVOICE)</h2>
+                <span style={{ fontSize: '9pt', color: '#444' }}>발행일자: {todayStr} | 문서번호: TASS-INV-{printInvoiceOrder?.id || Date.now()}</span>
+              </div>
+              
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4mm', fontSize: '9.5pt' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ width: '50%', verticalAlign: 'top', border: '1px solid #000', padding: '3mm' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '11pt', borderBottom: '1px solid #000', paddingBottom: '1mm', marginBottom: '2mm' }}>[수하인 (공급받는 자)]</div>
+                      <div><strong>상호명:</strong> {printInvoicePartner.name} ({printInvoicePartner.type})</div>
+                      <div><strong>담당자:</strong> {printInvoicePartner.manager || '-'}</div>
+                      <div><strong>연락처:</strong> {printInvoicePartner.phone || printInvoicePartner.tel || '-'}</div>
+                      <div><strong>이메일:</strong> {printInvoicePartner.email || '-'}</div>
+                      <div><strong>배송지:</strong> {printInvoicePartner.address || '주소 미등록'}</div>
+                    </td>
+                    <td style={{ width: '50%', verticalAlign: 'top', border: '1px solid #000', padding: '3mm' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '11pt', borderBottom: '1px solid #000', paddingBottom: '1mm', marginBottom: '2mm' }}>[공급자 (발송인)]</div>
+                      <div><strong>상호명:</strong> 타스 (TASS)</div>
+                      <div><strong>대표자:</strong> 최윤호 (인)</div>
+                      <div><strong>연락처:</strong> 010-2621-0056</div>
+                      <div><strong>등록번호:</strong> 606-12-34567</div>
+                      <div><strong>발송지:</strong> 부산광역시 사상구 감전천로 137</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div style={{ fontWeight: 'bold', marginBottom: '2mm', fontSize: '10pt' }}>
+                [수주 및 출고 품목 내역{printInvoiceOrder ? ` (선택 품목: ${printInvoiceOrder.itemName})` : ''}]
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '4mm' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f1f5f9' }}>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>순번</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>프로젝트 번호</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>품목명</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>수량</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>발주일</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>납기일</th>
+                    <th style={{ border: '1px solid #000', padding: '2mm' }}>상태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(printInvoiceOrder ? [printInvoiceOrder] : orders.filter(o => o.partnerName === printInvoicePartner.name)).map((item, idx) => (
+                    <tr key={item.id}>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{idx + 1}</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center', fontWeight: 'bold' }}>{item.projectNo || `PRJ-${String(item.id).padStart(3, '0')}`}</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', fontWeight: 'bold' }}>{item.itemName}</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.quantity}개</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.orderDate || '-'}</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.dueDate || '-'}</td>
+                      <td style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center' }}>{item.status}</td>
+                    </tr>
+                  ))}
+                  {(printInvoiceOrder ? [printInvoiceOrder] : orders.filter(o => o.partnerName === printInvoicePartner.name)).length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ border: '1px solid #000', padding: '3mm', textAlign: 'center', color: '#666' }}>
+                        해당 거래처의 수주 내역이 존재하지 않습니다.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              <div style={{ border: '1px solid #000', padding: '3mm', fontSize: '8.5pt', lineHeight: 1.5 }}>
+                <div><strong>[특기사항 및 거래조건]</strong></div>
+                <div>{printInvoicePartner.memo || '인수 확인 후 서명 또는 도인을 날인하여 주시기 바랍니다.'}</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

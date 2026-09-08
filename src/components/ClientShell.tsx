@@ -3,13 +3,14 @@
 import { useState, useEffect } from 'react';
 import { AppShell, Burger, Group, NavLink, Title, Text, Box, Badge, Button, Paper, Stack, Center } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet, IconBuildingBank, IconLock, IconLogout, IconKey, IconTools, IconCalendar, IconScreenShare } from '@tabler/icons-react';
+import { IconUsers, IconFileDescription, IconPrinter, IconListCheck, IconFileSpreadsheet, IconBuildingBank, IconLock, IconLogout, IconKey, IconTools, IconCalendar, IconScreenShare, IconSpeakerphone } from '@tabler/icons-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import BgmPlayer from '@/components/BgmPlayer';
 import PWAInstallButton from '@/components/PWAInstallButton';
 import AuthModal from '@/components/AuthModal';
 import KioskScreenShareModal from '@/components/KioskScreenShareModal';
+import KioskBroadcastModal from '@/components/KioskBroadcastModal';
 import { useAuth } from '@/context/AuthContext';
 
 import SystemMonitorWidget from '@/components/SystemMonitorWidget';
@@ -18,6 +19,7 @@ import TassAiAssistant from '@/components/TassAiAssistant';
 export default function ClientShell({ children }: { children: React.ReactNode }) {
   const [opened, { toggle }] = useDisclosure();
   const [screenShareModalOpen, setScreenShareModalOpen] = useState(false);
+  const [broadcastModalOpen, setBroadcastModalOpen] = useState(false);
   const pathname = usePathname();
   const { isAuthenticated, role, logout, openAuthModal } = useAuth();
 
@@ -152,6 +154,11 @@ export default function ClientShell({ children }: { children: React.ReactNode })
               onClose={() => setScreenShareModalOpen(false)}
             />
 
+            <KioskBroadcastModal
+              opened={broadcastModalOpen}
+              onClose={() => setBroadcastModalOpen(false)}
+            />
+
             <PWAInstallButton />
             
             {/* 권한 상태 표시 배지 */}
@@ -283,7 +290,17 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             leftSection={<IconCalendar size="1.1rem" stroke={1.5} />}
             active={pathname === '/calendar' || pathname === '/schedules'}
             onClick={handleNavClick}
-            style={{ borderRadius: '8px' }}
+            style={{ borderRadius: '8px', marginBottom: '4px' }}
+          />
+          <NavLink
+            label="현장 방송 송출"
+            leftSection={<IconSpeakerphone size="1.1rem" stroke={1.5} />}
+            active={pathname === '/broadcast'}
+            onClick={() => {
+              handleNavClick();
+              setBroadcastModalOpen(true);
+            }}
+            style={{ borderRadius: '8px', color: '#2563eb', fontWeight: 700 }}
           />
         </Box>
 

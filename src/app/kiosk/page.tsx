@@ -41,7 +41,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import KioskBroadcastOverlay from '@/components/KioskBroadcastOverlay';
-import { playDingDongChime, speakKoreanTTS } from '@/lib/audioUtil';
+import { playChimeAndSpeak } from '@/lib/audioUtil';
 
 export type ProcessStep = {
   name: string;
@@ -148,7 +148,6 @@ export default function KioskPage() {
   // Kiosk Broadcast Alert State
   const [broadcastOverlayOpen, setBroadcastOverlayOpen] = useState<boolean>(false);
   const [broadcastMessage, setBroadcastMessage] = useState<string>('');
-  const [broadcastTargetStation, setBroadcastTargetStation] = useState<string>('');
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -260,42 +259,27 @@ export default function KioskPage() {
     };
   }, [mutateOrders]);
 
-  // Supabase Realtime Broadcast Signal Listener for On-site Announcements
+  // Supabase Realtime Broadcast Signal Listener for On-site Announcements (Global to all kiosks)
   useEffect(() => {
-    if (!supabase || !stationId) return;
+    if (!supabase) return;
 
-    const broadcastChannel = supabase.channel('kiosk-broadcast');
+    const broadcastChannel = supabase.channel('kiosk-global-broadcast');
 
     broadcastChannel
-      .on('broadcast', { event: 'notice' }, (payload: any) => {
+      .on('broadcast', { event: 'global-notice' }, (payload: any) => {
         const data = payload?.payload;
         if (!data || !data.message) return;
 
-        const target = data.targetStation; // 'all' | '1' | '2' | '3' | '4'
-        const isTargetMatch =
-          target === 'all' ||
-          stationId.startsWith(target) ||
-          stationId.includes(`${target}번`);
-
-        if (isTargetMatch) {
-          setBroadcastMessage(data.message);
-          setBroadcastTargetStation(target);
-          setBroadcastOverlayOpen(true);
-
-          if (data.playSound) {
-            playDingDongChime();
-            setTimeout(() => {
-              speakKoreanTTS(data.message);
-            }, 450);
-          }
-        }
+        setBroadcastMessage(data.message);
+        setBroadcastOverlayOpen(true);
+        playChimeAndSpeak(data.message);
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(broadcastChannel);
     };
-  }, [stationId]);
+  }, []);
 
   // Supabase Realtime Presence & WebRTC Receiver Signal Listener (Requirement 2 & Bug Fix)
   useEffect(() => {
@@ -1704,7 +1688,6 @@ export default function KioskPage() {
       <KioskBroadcastOverlay
         opened={broadcastOverlayOpen}
         message={broadcastMessage}
-        targetStation={broadcastTargetStation}
         onClose={() => setBroadcastOverlayOpen(false)}
       />
     </div>

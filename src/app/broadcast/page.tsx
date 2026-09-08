@@ -8,10 +8,8 @@ import {
   Text,
   Group,
   Stack,
-  SegmentedControl,
   Button,
   Textarea,
-  Checkbox,
   Badge,
   Card,
   SimpleGrid
@@ -20,22 +18,11 @@ import { notifications } from '@mantine/notifications';
 import {
   IconSpeakerphone,
   IconSend,
-  IconVolume,
-  IconVolumeOff,
   IconSparkles,
-  IconRadio,
-  IconCheck
+  IconCheck,
+  IconBuildingFactory2
 } from '@tabler/icons-react';
 import { supabase } from '@/lib/supabase';
-import { BroadcastPayload } from '@/components/KioskBroadcastModal';
-
-const TARGET_OPTIONS = [
-  { label: '📢 전체 키오스크', value: 'all' },
-  { label: '1번 (설계/공정)', value: '1' },
-  { label: '2번 (절단/가공)', value: '2' },
-  { label: '3번 (용접/도장)', value: '3' },
-  { label: '4번 (조립/출고)', value: '4' },
-];
 
 const QUICK_TEMPLATES = [
   {
@@ -56,9 +43,7 @@ const QUICK_TEMPLATES = [
 ];
 
 export default function BroadcastPage() {
-  const [targetStation, setTargetStation] = useState<'all' | '1' | '2' | '3' | '4'>('all');
   const [message, setMessage] = useState<string>('');
-  const [playSound, setPlaySound] = useState<boolean>(true);
   const [isSending, setIsSending] = useState<boolean>(false);
 
   const handleTemplateClick = (templateText: string) => {
@@ -78,32 +63,28 @@ export default function BroadcastPage() {
     setIsSending(true);
 
     try {
-      const payload: BroadcastPayload = {
-        targetStation,
-        message: message.trim(),
-        playSound,
-        timestamp: Date.now(),
-      };
-
-      const broadcastChannel = supabase.channel('kiosk-broadcast');
+      const channel = supabase.channel('kiosk-global-broadcast');
       
-      await broadcastChannel.subscribe(async (status) => {
+      await channel.subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          await broadcastChannel.send({
+          await channel.send({
             type: 'broadcast',
-            event: 'notice',
-            payload,
+            event: 'global-notice',
+            payload: {
+              message: message.trim(),
+              timestamp: Date.now(),
+            },
           });
 
           setTimeout(() => {
-            supabase.removeChannel(broadcastChannel);
+            supabase.removeChannel(channel);
           }, 1000);
         }
       });
 
       notifications.show({
-        title: '📢 방송 전송 완료',
-        message: `${targetStation === 'all' ? '전체 키오스크' : `${targetStation}번 키오스크`}로 공지가 실시간 송출되었습니다.`,
+        title: '📢 전체 현장 방송 전송 완료',
+        message: '모든 현장 키오스크 화면으로 공지가 실시간 송출되었습니다.',
         color: 'teal',
         icon: <IconSpeakerphone size={18} />,
       });
@@ -142,7 +123,7 @@ export default function BroadcastPage() {
                 현장 방송 / 공지 송출 제어판
               </Title>
               <Text size="sm" c="dimmed">
-                현장 작업 키오스크 화면에 대형 비상/공지 팝업을 띄우고, 음성(TTS) 및 알림음으로 실시간 전달합니다.
+                접속 중인 모든 현장 키오스크 화면에 대형 공지 팝업과 차임벨 효과음 + 음성(TTS)을 실시간으로 전달합니다.
               </Text>
             </div>
           </Group>
@@ -150,36 +131,25 @@ export default function BroadcastPage() {
 
         <Paper p="xl" radius="lg" shadow="sm" style={{ border: '1px solid #e2e8f0', backgroundColor: '#ffffff' }}>
           <Stack gap="xl">
-            {/* 1. 송출 대상 선택 */}
-            <Stack gap="xs">
-              <Group justify="space-between">
-                <Text size="md" fw={700} style={{ color: '#1e293b' }}>
-                  🎯 1. 송출 대상 키오스크 선택
-                </Text>
-                <Badge color={targetStation === 'all' ? 'blue' : 'teal'} variant="filled" size="md">
-                  {targetStation === 'all' ? '전체 키오스크 대상' : `${targetStation}번 키오스크 대상`}
+            {/* 1. 송출 대상 고정 표기 */}
+            <Paper p="md" radius="md" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+              <Group justify="space-between" align="center">
+                <Group gap="xs">
+                  <IconBuildingFactory2 size={22} color="#2563eb" />
+                  <Text size="md" fw={800} c="blue.9">
+                    송출 대상: 전체 현장 키오스크 (모든 화면 동시 방송)
+                  </Text>
+                </Group>
+                <Badge color="blue" variant="filled" size="md">
+                  전체 동시 송출
                 </Badge>
               </Group>
-
-              <SegmentedControl
-                value={targetStation}
-                onChange={(val) => setTargetStation(val as 'all' | '1' | '2' | '3' | '4')}
-                data={TARGET_OPTIONS}
-                fullWidth
-                color="blue"
-                size="md"
-                radius="md"
-                styles={{
-                  root: { backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', padding: '6px' },
-                  label: { fontWeight: 700, padding: '10px 4px', fontSize: '14px' }
-                }}
-              />
-            </Stack>
+            </Paper>
 
             {/* 2. 빠른 템플릿 버튼 */}
             <Stack gap="xs">
               <Text size="md" fw={700} style={{ color: '#1e293b' }}>
-                ⚡ 2. 빠른 문구 템플릿
+                ⚡ 빠른 문구 템플릿
               </Text>
               <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
                 {QUICK_TEMPLATES.map((tmpl, idx) => (
@@ -213,10 +183,10 @@ export default function BroadcastPage() {
             {/* 3. 방송/공지 문구 입력 */}
             <Stack gap="xs">
               <Text size="md" fw={700} style={{ color: '#1e293b' }}>
-                📝 3. 방송 / 공지 문구 직접 입력
+                📝 방송 / 공지 문구 직접 입력
               </Text>
               <Textarea
-                placeholder="현장에 실시간으로 음성(TTS) 및 팝업 안내할 내용을 입력하세요."
+                placeholder="현장에 실시간으로 음성(TTS) 및 대형 팝업 안내할 내용을 입력하세요."
                 value={message}
                 onChange={(e) => setMessage(e.currentTarget.value)}
                 minRows={5}
@@ -234,43 +204,26 @@ export default function BroadcastPage() {
               />
             </Stack>
 
-            {/* 4. 옵션 & 전송 버튼 */}
-            <Stack gap="md">
-              <Checkbox
-                checked={playSound}
-                onChange={(e) => setPlaySound(e.currentTarget.checked)}
-                label={
-                  <Group gap={6} align="center">
-                    {playSound ? <IconVolume size={20} color="#2563eb" /> : <IconVolumeOff size={20} color="#94a3b8" />}
-                    <Text size="md" fw={700} c={playSound ? 'blue.9' : 'gray.6'}>
-                      소리 알림 포함 (띵동 차임벨 효과음 + 한국어 음성 읽기 TTS)
-                    </Text>
-                  </Group>
-                }
-                color="blue"
-                size="md"
-              />
-
-              <Button
-                size="xl"
-                color="blue"
-                fullWidth
-                radius="md"
-                onClick={handleSendBroadcast}
-                loading={isSending}
-                disabled={!message.trim()}
-                leftSection={<IconSend size={24} />}
-                style={{
-                  height: '60px',
-                  fontSize: '18px',
-                  fontWeight: 900,
-                  letterSpacing: '0.5px',
-                  boxShadow: message.trim() ? '0 6px 18px rgba(37, 99, 235, 0.4)' : undefined
-                }}
-              >
-                📢 현장 키오스크 공지 / 방송 실시간 송출하기
-              </Button>
-            </Stack>
+            {/* 4. 전송 버튼 */}
+            <Button
+              size="xl"
+              color="blue"
+              fullWidth
+              radius="md"
+              onClick={handleSendBroadcast}
+              loading={isSending}
+              disabled={!message.trim()}
+              leftSection={<IconSend size={24} />}
+              style={{
+                height: '60px',
+                fontSize: '18px',
+                fontWeight: 900,
+                letterSpacing: '0.5px',
+                boxShadow: message.trim() ? '0 6px 18px rgba(37, 99, 235, 0.4)' : undefined
+              }}
+            >
+              📢 전체 현장 키오스크 공지 / 방송 실시간 송출하기
+            </Button>
           </Stack>
         </Paper>
       </Stack>

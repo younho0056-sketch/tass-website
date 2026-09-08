@@ -1,5 +1,5 @@
 /**
- * Web Audio API & Web Speech API Utilities for Kiosk Broadcast
+ * Web Audio API & Web Speech API Utilities for Kiosk Global Broadcast
  */
 
 /**
@@ -52,7 +52,6 @@ export function playDingDongChime(): void {
     osc2.start(now + 0.4);
     osc2.stop(now + 1.25);
 
-    // Clean up AudioContext after sounds finish
     setTimeout(() => {
       ctx.close().catch(() => {});
     }, 1500);
@@ -68,16 +67,14 @@ export function speakKoreanTTS(text: string): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
   try {
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'ko-KR';
-    utterance.rate = 0.95; // Slightly clear and deliberate speed
+    utterance.rate = 0.95;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
-    // Try to find a natural Korean voice if available
     const voices = window.speechSynthesis.getVoices();
     const koVoice = voices.find((v) => v.lang.includes('ko') || v.lang.includes('KO'));
     if (koVoice) {
@@ -88,4 +85,14 @@ export function speakKoreanTTS(text: string): void {
   } catch (err) {
     console.error('Failed to execute TTS:', err);
   }
+}
+
+/**
+ * Play chime sound followed by Korean TTS reading
+ */
+export function playChimeAndSpeak(message: string): void {
+  playDingDongChime();
+  setTimeout(() => {
+    speakKoreanTTS(message);
+  }, 450);
 }

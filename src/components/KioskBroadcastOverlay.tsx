@@ -17,7 +17,6 @@ import { IconSpeakerphone, IconVolume, IconCheck, IconAlertTriangle } from '@tab
 interface KioskBroadcastOverlayProps {
   opened: boolean;
   message: string;
-  targetStation: string;
   onClose: () => void;
 }
 
@@ -26,7 +25,6 @@ const DURATION_SECONDS = 10;
 export default function KioskBroadcastOverlay({
   opened,
   message,
-  targetStation,
   onClose
 }: KioskBroadcastOverlayProps) {
   const [timeLeft, setTimeLeft] = useState<number>(DURATION_SECONDS);
@@ -80,20 +78,22 @@ export default function KioskBroadcastOverlay({
       centered
       size="90%"
       radius="xl"
+      zIndex={9999}
       overlayProps={{
         color: '#000000',
-        opacity: 0.85,
+        opacity: 0.88,
         blur: 8
       }}
       styles={{
         content: {
           backgroundColor: '#0f172a',
           border: '3px solid #3b82f6',
-          boxShadow: '0 0 50px rgba(59, 130, 246, 0.5)',
-          padding: '24px',
+          boxShadow: '0 0 60px rgba(59, 130, 246, 0.6)',
+          padding: '28px',
           color: '#ffffff',
-          maxWidth: '900px',
-          margin: '0 auto'
+          maxWidth: '920px',
+          margin: '0 auto',
+          zIndex: 9999
         }
       }}
     >
@@ -114,20 +114,18 @@ export default function KioskBroadcastOverlay({
           >
             긴급 방송 / 사무실 공지
           </Badge>
-          {targetStation && targetStation !== 'all' && (
-            <Badge size="lg" color="yellow" variant="light" style={{ fontWeight: 800 }}>
-              {targetStation}번 공정 전달
-            </Badge>
-          )}
+          <Badge size="lg" color="blue" variant="filled" style={{ fontWeight: 800 }}>
+            전체 현장 키오스크
+          </Badge>
         </Group>
 
         {/* 타이틀 아이콘 & 헤더 */}
         <Group gap="md" align="center">
-          <IconSpeakerphone size={42} style={{ color: '#60a5fa' }} />
+          <IconSpeakerphone size={46} style={{ color: '#60a5fa' }} />
           <Text
             fw={900}
             style={{
-              fontSize: '28px',
+              fontSize: '30px',
               color: '#ffffff',
               letterSpacing: '1px',
               textAlign: 'center'
@@ -145,7 +143,7 @@ export default function KioskBroadcastOverlay({
             backgroundColor: '#1e293b',
             border: '2px solid #475569',
             width: '100%',
-            minHeight: '180px',
+            minHeight: '200px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -155,7 +153,7 @@ export default function KioskBroadcastOverlay({
           <Text
             fw={900}
             style={{
-              fontSize: '28px',
+              fontSize: '30px',
               color: '#ffffff',
               textAlign: 'center',
               lineHeight: 1.6,
@@ -171,7 +169,7 @@ export default function KioskBroadcastOverlay({
         <Stack gap="xs" style={{ width: '100%' }}>
           <Group justify="space-between" align="center">
             <Group gap={6} align="center">
-              <IconVolume size={18} color="#60a5fa" />
+              <IconVolume size={20} color="#60a5fa" />
               <Text size="sm" c="blue.2" fw={700}>
                 음성 및 차임벨 안내 진행 중
               </Text>
@@ -185,13 +183,13 @@ export default function KioskBroadcastOverlay({
           <Progress
             value={progressPercent}
             color="blue"
-            size="lg"
+            size="xl"
             radius="xl"
             animated
             style={{ backgroundColor: '#334155' }}
           />
 
-          <Box mt="md" style={{ display: 'flex', justifyContent: 'center' }}>
+          <Box mt="md" style={{ display: 'flex', justifyCenter: 'center', width: '100%', justifyContent: 'center' }}>
             <Button
               size="xl"
               color="blue"
@@ -199,9 +197,9 @@ export default function KioskBroadcastOverlay({
               onClick={handleManualClose}
               leftSection={<IconCheck size={26} />}
               style={{
-                width: '280px',
-                height: '56px',
-                fontSize: '18px',
+                width: '300px',
+                height: '60px',
+                fontSize: '19px',
                 fontWeight: 900,
                 backgroundColor: '#2563eb'
               }}

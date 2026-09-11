@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const openAuthModal = (targetPath?: string) => {
-    if (targetPath) setTargetUrl(targetPath);
+    setTargetUrl(targetPath || '/orders');
     setIsAuthModalOpen(true);
   };
 

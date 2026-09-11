@@ -154,7 +154,7 @@ export default function LandingPage() {
               radius="md" 
               size="sm" 
               rightSection={<IconArrowRight size={15} />}
-              onClick={() => handleNavTarget('/partners')}
+              onClick={() => handleNavTarget('/orders')}
               style={{ borderRadius: '6px', fontWeight: 700 }}
             >
               관리자 시스템 접속

@@ -362,10 +362,11 @@ export default function PartnersPage() {
       </SimpleGrid>
 
       <div className="glass-panel table-responsive-container" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <Table striped highlightOnHover withTableBorder verticalSpacing="sm">
+        {/* layout="fixed": 열 너비를 헤더 기준으로 고정해, 특정 행의 긴 데이터가 표 전체 레이아웃을 깨뜨리지 않도록 함 */}
+        <Table striped highlightOnHover withTableBorder verticalSpacing="sm" layout="fixed" miw={1660}>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th w={40}>
+              <Table.Th w={44}>
                 <Checkbox
                   checked={areAllFilteredSelected}
                   indeterminate={isIndeterminate}
@@ -373,17 +374,17 @@ export default function PartnersPage() {
                   disabled={filteredPartners.length === 0}
                 />
               </Table.Th>
-              <Table.Th w={85}>구분</Table.Th>
-              <Table.Th w={150}>업체명</Table.Th>
+              <Table.Th w={110}>구분</Table.Th>
+              <Table.Th w={160}>업체명</Table.Th>
               <Table.Th>분야</Table.Th>
-              <Table.Th w={100}>담당자</Table.Th>
-              <Table.Th w={125}>휴대폰</Table.Th>
-              <Table.Th w={125}>회사전화</Table.Th>
-              <Table.Th w={110}>팩스</Table.Th>
-              <Table.Th w={140}>이메일</Table.Th>
+              <Table.Th w={125}>담당자</Table.Th>
+              <Table.Th w={130}>휴대폰</Table.Th>
+              <Table.Th w={340}>회사전화</Table.Th>
+              <Table.Th w={125}>팩스</Table.Th>
+              <Table.Th w={160}>이메일</Table.Th>
               <Table.Th>주소</Table.Th>
-              <Table.Th w={100}>비고</Table.Th>
-              <Table.Th w={130}>작업</Table.Th>
+              <Table.Th w={120}>비고</Table.Th>
+              <Table.Th w={100}>작업</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -404,7 +405,10 @@ export default function PartnersPage() {
                     {p.type}
                   </Badge>
                 </Table.Td>
-                <Table.Td fw={700}>{p.name}</Table.Td>
+                <Table.Td>
+                  {/* 업체명은 잘리지 않도록 칸 안에서 줄바꿈 허용 (전역 td nowrap 덮어쓰기) */}
+                  <Text fw={700} size="sm" style={{ whiteSpace: 'normal', wordBreak: 'keep-all', overflowWrap: 'anywhere' }}>{p.name}</Text>
+                </Table.Td>
                 <Table.Td>
                   <Group gap={4} wrap="wrap">
                     {p.specialty ? p.specialty.split(',').filter(Boolean).map(s => (
@@ -412,25 +416,14 @@ export default function PartnersPage() {
                     )) : '-'}
                   </Group>
                 </Table.Td>
-                <Table.Td>{p.manager || '-'}</Table.Td>
-                <Table.Td>{p.phone || '-'}</Table.Td>
-                <Table.Td>{p.tel || '-'}</Table.Td>
-                <Table.Td>{p.fax || '-'}</Table.Td>
-                <Table.Td>
-                  <Tooltip label={p.email || ''} disabled={!p.email}>
-                    <Text truncate="end" size="sm" style={{ maxWidth: 130 }}>{p.email || '-'}</Text>
-                  </Tooltip>
-                </Table.Td>
-                <Table.Td>
-                  <Tooltip label={p.address || ''} disabled={!p.address}>
-                    <Text truncate="end" size="sm" style={{ maxWidth: 150 }}>{p.address || '-'}</Text>
-                  </Tooltip>
-                </Table.Td>
-                <Table.Td>
-                  <Tooltip label={p.memo || ''} disabled={!p.memo}>
-                    <Text truncate="end" size="sm" style={{ maxWidth: 90 }}>{p.memo || '-'}</Text>
-                  </Tooltip>
-                </Table.Td>
+                {/* 긴 값(여러 지점 번호·주소 등)은 칸 너비에서 말줄임, 마우스를 올리면 전체 표시 */}
+                {[p.manager, p.phone, p.tel, p.fax, p.email, p.address, p.memo].map((value, i) => (
+                  <Table.Td key={i}>
+                    <Tooltip label={value || ''} disabled={!value} multiline maw={400}>
+                      <Text truncate="end" size="sm">{value || '-'}</Text>
+                    </Tooltip>
+                  </Table.Td>
+                ))}
                 <Table.Td>
                   <Group gap={4} wrap="nowrap">
                     <Tooltip label="수정">

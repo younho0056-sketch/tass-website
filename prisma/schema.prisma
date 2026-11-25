@@ -82,6 +82,36 @@ model Estimate {
   updatedAt       DateTime @updatedAt
 }
 
+// 견적관리 파일 보드: 드래그로 올린 견적서 파일(PDF·엑셀) 한 건
+model EstimateFile {
+  id           Int               @id @default(autoincrement())
+  fileName     String            // 원본 파일 이름
+  mimeType     String?
+  fileSize     Int               @default(0)
+  projectName  String            // 공사명 (카드 제목)
+  partnerName  String?
+  quantity     Int               @default(1)
+  amount       Float?            // 최종 합계 금액
+  estimateDate String?           // 'YYYY-MM-DD'
+  deliveryTerm String?           // 납품기한
+  processSteps String            @default("[]") // JSON: 진행할 공정 이름 목록 ["설계","절단",...]
+  status       String            @default("견적중") // '견적중', '견적완료', '수주성공', '수주취소'
+  orderId      Int?              // 발주로 만든 공정관리(Order) id
+  projectNo    String?           // 발주로 만든 프로젝트 번호 (PRJ-xxx)
+  memo         String?
+  content      EstimateFileData?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+// 견적서 파일 내용 (목록 조회 때 같이 읽지 않도록 따로 보관)
+model EstimateFileData {
+  id     Int          @id @default(autoincrement())
+  fileId Int          @unique
+  file   EstimateFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  data   Bytes
+}
+
 model Product {
   id        Int      @id @default(autoincrement())
   name      String

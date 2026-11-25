@@ -14,7 +14,10 @@ import {
 } from '@tabler/icons-react';
 import * as xlsx from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
+import EstimateFileBoard from '@/components/EstimateFileBoard';
+import OrderFromEstimateModal from '@/components/OrderFromEstimateModal';
 import { useAuth } from '@/context/AuthContext';
+import type { EstimateFileItem } from '@/lib/estimateFiles';
 
 type EstimateItem = {
   no: number;
@@ -109,6 +112,11 @@ export default function EstimatesPage() {
   const [search, setSearch] = useState('');
   const [tabFilter, setTabFilter] = useState<string>('ALL');
 
+  // 견적서 파일 보드 (기본 화면) / 기존 목록
+  const [view, setView] = useState<'board' | 'list'>('board');
+  const [estimateFiles, setEstimateFiles] = useState<EstimateFileItem[]>([]);
+  const [orderTarget, setOrderTarget] = useState<EstimateFileItem | null>(null);
+
   // Form & Modal State
   const [opened, { open, close }] = useDisclosure(false);
   const [editingEst, setEditingEst] = useState<Estimate | null>(null);
@@ -165,6 +173,16 @@ export default function EstimatesPage() {
     }
   }, []);
 
+  const fetchEstimateFiles = useCallback(async () => {
+    try {
+      const res = await fetch('/api/estimate-files');
+      const data = await res.json();
+      if (Array.isArray(data.files)) setEstimateFiles(data.files);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
   const fetchPartners = useCallback(async () => {
     try {
       const res = await fetch('/api/partners');
@@ -196,7 +214,8 @@ export default function EstimatesPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchEstimates();
     fetchPartners();
-  }, [fetchEstimates, fetchPartners]);
+    fetchEstimateFiles();
+  }, [fetchEstimates, fetchPartners, fetchEstimateFiles]);
 
   const resetForm = () => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -429,6 +448,38 @@ export default function EstimatesPage() {
 
   const activePrintEst = printTargetEst || (filteredEstimates.length > 0 ? filteredEstimates[0] : null);
 
+  const partnerNames = useMemo(() => partnerOptions.map(opt => opt.value), [partnerOptions]);
+
+  const filteredFiles = useMemo(() => {
+    const q = search.trim();
+    return estimateFiles.filter(f => {
+      const matchTab = tabFilter === 'ALL' ? true : f.status === tabFilter;
+      const matchSearch = !q || [f.projectName, f.partnerName, f.fileName, f.projectNo, f.memo].some(v => v && v.includes(q));
+      return matchTab && matchSearch;
+    });
+  }, [estimateFiles, search, tabFilter]);
+
+  // 상태 탭 숫자: 보고 있는 화면 기준
+  const tabCounts = useMemo(() => {
+    if (view === 'list') {
+      return {
+        inProgress: metrics.inProgressCount,
+        completed: metrics.completedCount,
+        success: metrics.successCount,
+        cancelled: metrics.cancelledCount,
+        total: metrics.totalCount,
+      };
+    }
+    const count = (s: string) => estimateFiles.filter(f => f.status === s).length;
+    return {
+      inProgress: count('견적중'),
+      completed: count('견적완료'),
+      success: count('수주성공'),
+      cancelled: count('수주취소'),
+      total: estimateFiles.length,
+    };
+  }, [view, metrics, estimateFiles]);
+
   return (
     <>
       {/* SCREEN VIEW (Hidden during print) */}
@@ -460,11 +511,11 @@ export default function EstimatesPage() {
           value={tabFilter}
           onChange={setTabFilter}
           data={[
-            { label: `견적중 (${metrics.inProgressCount}건)`, value: '견적중' },
-            { label: `견적완료 (${metrics.completedCount}건)`, value: '견적완료' },
-            { label: `수주성공 (${metrics.successCount}건)`, value: '수주성공' },
-            { label: `수주취소 (${metrics.cancelledCount}건)`, value: '수주취소' },
-            { label: `전체 보기 (${metrics.totalCount}건)`, value: 'ALL' },
+            { label: `견적중 (${tabCounts.inProgress}건)`, value: '견적중' },
+            { label: `견적완료 (${tabCounts.completed}건)`, value: '견적완료' },
+            { label: `수주성공 (${tabCounts.success}건)`, value: '수주성공' },
+            { label: `수주취소 (${tabCounts.cancelled}건)`, value: '수주취소' },
+            { label: `전체 보기 (${tabCounts.total}건)`, value: 'ALL' },
           ]}
           size="md"
           radius="md"
@@ -475,15 +526,44 @@ export default function EstimatesPage() {
         {/* 검색 창 */}
         <Group className="glass-panel" p="md">
           <TextInput 
-            placeholder="거래처명, 공사/프로젝트명, 문서번호 또는 취소 사유 검색..." 
+            placeholder={view === 'board' ? '공사명, 거래처명, 파일 이름 또는 프로젝트 번호 검색...' : '거래처명, 공사/프로젝트명, 문서번호 또는 취소 사유 검색...'} 
             value={search} 
             onChange={(e) => setSearch(e.currentTarget.value)} 
             leftSection={<IconSearch size={16} />}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 220 }}
+          />
+          <SegmentedControl
+            value={view}
+            onChange={(v) => setView(v as 'board' | 'list')}
+            data={[
+              { label: '견적서 파일', value: 'board' },
+              { label: '기존 목록', value: 'list' },
+            ]}
+            size="sm"
           />
         </Group>
 
-        {/* 견적서 목록 테이블 */}
+        {view === 'board' && (
+          <EstimateFileBoard
+            files={filteredFiles}
+            totalCount={estimateFiles.length}
+            partnerNames={partnerNames}
+            canEdit={canEdit}
+            onChanged={fetchEstimateFiles}
+            onOrder={setOrderTarget}
+          />
+        )}
+
+        <OrderFromEstimateModal
+          file={orderTarget}
+          opened={!!orderTarget}
+          onClose={() => setOrderTarget(null)}
+          partnerNames={partnerNames}
+          onDone={fetchEstimateFiles}
+        />
+
+        {/* 견적서 목록 테이블 (기존 목록) */}
+        {view === 'list' && (
         <div className="glass-panel table-responsive-container" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <Table striped highlightOnHover withTableBorder verticalSpacing="md">
             <Table.Thead>
@@ -593,6 +673,7 @@ export default function EstimatesPage() {
             </Table.Tbody>
           </Table>
         </div>
+        )}
 
         {/* 견적서 작성 / 수정 모달 */}
         <Modal

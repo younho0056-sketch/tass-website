@@ -11,6 +11,7 @@ import { IconTrash, IconMail, IconPrinter, IconDownload, IconUpload, IconPencil,
 import { useRouter } from 'next/navigation';
 import * as xlsx from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
+import PartnerDetailModal from '@/components/PartnerDetailModal';
 import { useAuth } from '@/context/AuthContext';
 
 type Partner = {
@@ -40,6 +41,8 @@ export default function PartnersPage() {
   // Modal & Form state
   const [opened, { open, close }] = useDisclosure(false);
   const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
+  // 행을 눌렀을 때 뜨는 거래처 상세 팝업
+  const [detailPartner, setDetailPartner] = useState<Partner | null>(null);
   const [mounted, setMounted] = useState(false);
   const [type, setType] = useState('매출처');
   const [name, setName] = useState('');
@@ -389,8 +392,12 @@ export default function PartnersPage() {
           </Table.Thead>
           <Table.Tbody>
             {filteredPartners.map(p => (
-              <Table.Tr key={p.id} style={{ backgroundColor: selectedIds.includes(p.id) ? 'rgba(51, 154, 240, 0.08)' : undefined }}>
-                <Table.Td>
+              <Table.Tr
+                key={p.id}
+                onClick={() => setDetailPartner(p)}
+                style={{ cursor: 'pointer', backgroundColor: selectedIds.includes(p.id) ? 'rgba(51, 154, 240, 0.08)' : undefined }}
+              >
+                <Table.Td onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={selectedIds.includes(p.id)}
                     onChange={() => toggleSelection(p.id)}
@@ -424,7 +431,7 @@ export default function PartnersPage() {
                     </Tooltip>
                   </Table.Td>
                 ))}
-                <Table.Td>
+                <Table.Td onClick={(e) => e.stopPropagation()}>
                   <Group gap={4} wrap="nowrap">
                     <Tooltip label="수정">
                       <ActionIcon color="dark" variant="subtle" size="sm" onClick={() => handleOpenEdit(p)}>
@@ -456,8 +463,20 @@ export default function PartnersPage() {
         </Table>
       </div>
 
-      <Modal 
-        opened={mounted && opened} 
+      <PartnerDetailModal
+        partner={detailPartner}
+        opened={mounted && !!detailPartner}
+        onClose={() => setDetailPartner(null)}
+        canEdit={canEdit}
+        onEdit={(p) => {
+          setDetailPartner(null);
+          handleOpenEdit(p);
+        }}
+        onPrintLabel={(p) => handlePrintLabel(p.id)}
+      />
+
+      <Modal
+        opened={mounted && opened}
         onClose={close} 
         title={editingPartner ? "거래처 정보 수정" : "새 거래처 등록"} 
         size="lg"

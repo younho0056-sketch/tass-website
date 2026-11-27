@@ -2222,78 +2222,115 @@ export default function OrdersPage() {
           </div>
         ) : viewMode === 'CALENDAR' ? (
           <div className="orders-print-page">
-            <div style={{ textAlign: 'center', marginBottom: '3mm' }}>
-              <h1 style={{ fontSize: '16pt', fontWeight: 800, margin: 0, padding: 0, display: 'inline-block' }}>
-                TASS 현장 지시용 월간 공정 캘린더 ({calendarDate.getFullYear()}년 {calendarDate.getMonth() + 1}월)
-              </h1>
-              <span style={{ fontSize: '9pt', color: '#444', marginLeft: '12px' }}>
-                (출력일자: {todayStr} | Technology About Safety Systems)
-              </span>
-            </div>
+            {(() => {
+              // A4 가로(인쇄 영역 277 x 190mm) 한 장에 들어가도록 주(週) 칸 높이를 고정한다
+              const weeks = Math.ceil(calendarDays.length / 7);
+              const rowMm = weeks >= 6 ? 27 : weeks === 5 ? 32 : 40;
+              const bodyMm = rowMm - 2 - 4; // 칸 위아래 여백 + 날짜 숫자 줄
+              const ONE_LINE_MM = 4.1;
+              const TWO_LINE_MM = 7.1;
+              const toneStyle = (tone: 'done' | 'urgent' | 'normal') =>
+                tone === 'done'
+                  ? { bar: '#16a34a', bg: '#e6f4ea' }
+                  : tone === 'urgent'
+                  ? { bar: '#dc2626', bg: '#fce8e6' }
+                  : { bar: '#2563eb', bg: '#e8f0fe' };
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8.5pt', tableLayout: 'fixed' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f1f5f9' }}>
-                  {['일 (Sun)', '월 (Mon)', '화 (Tue)', '수 (Wed)', '목 (Thu)', '금 (Fri)', '토 (Sat)'].map((day, idx) => (
-                    <th key={day} style={{ border: '1px solid #000', padding: '2mm', textAlign: 'center', color: idx === 0 ? '#dc2626' : idx === 6 ? '#2563eb' : '#000', fontWeight: 'bold' }}>
-                      {day}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: Math.ceil(calendarDays.length / 7) }).map((_, weekIdx) => {
-                  const weekDays = calendarDays.slice(weekIdx * 7, weekIdx * 7 + 7);
-                  return (
-                    <tr key={weekIdx}>
-                      {weekDays.map((cell, dayIdx) => {
-                        const dayOrders = getOrdersForDate(cell.dateStr);
+              return (
+                <>
+                  <div style={{ textAlign: 'center', marginBottom: '2mm', whiteSpace: 'nowrap' }}>
+                    <h1 style={{ fontSize: '14pt', fontWeight: 800, margin: 0, padding: 0, display: 'inline-block' }}>
+                      TASS 현장 지시용 월간 납기 캘린더 ({calendarDate.getFullYear()}년 {calendarDate.getMonth() + 1}월)
+                    </h1>
+                    <span style={{ fontSize: '8pt', color: '#444', marginLeft: '10px' }}>
+                      빨강 = 납기 {DUE_SOON_DAYS}일 이내·지남 | 출력일자: {todayStr} | Technology About Safety Systems
+                    </span>
+                  </div>
+
+                  <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f1f5f9' }}>
+                        {['일 (Sun)', '월 (Mon)', '화 (Tue)', '수 (Wed)', '목 (Thu)', '금 (Fri)', '토 (Sat)'].map((day, idx) => (
+                          <th key={day} style={{ border: '1px solid #000', padding: '1.2mm', fontSize: '8.5pt', textAlign: 'center', color: idx === 0 ? '#dc2626' : idx === 6 ? '#2563eb' : '#000', fontWeight: 'bold' }}>
+                            {day}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: weeks }).map((_, weekIdx) => {
+                        const weekDays = calendarDays.slice(weekIdx * 7, weekIdx * 7 + 7);
                         return (
-                          <td
-                            key={dayIdx}
-                            style={{
-                              border: '1px solid #000',
-                              height: '24mm',
-                              verticalAlign: 'top',
-                              padding: '1.5mm',
-                              backgroundColor: !cell.isCurrentMonth ? '#f8fafc' : '#ffffff'
-                            }}
-                          >
-                            {cell.dayNum && (
-                              <div style={{ fontWeight: 'bold', fontSize: '9pt', marginBottom: '1mm', color: dayIdx === 0 ? '#dc2626' : dayIdx === 6 ? '#2563eb' : '#000' }}>
-                                {cell.dayNum}
-                              </div>
-                            )}
-                            {dayOrders.map(o => {
-                              const { label: tag, tone } = getDueTag(o);
-                              const isCompleted = tone === 'done';
-                              const isUrgent = tone === 'urgent';
-                              const pNo = o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`;
-                              
+                          <tr key={weekIdx} style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                            {weekDays.map((cell, dayIdx) => {
+                              const dayOrders = getOrdersForDate(cell.dateStr);
+                              const n = dayOrders.length;
+                              // 건수가 적으면 두 줄씩, 많으면 한 줄씩, 그래도 넘치면 "+N건 더"
+                              const twoLine = n * TWO_LINE_MM <= bodyMm;
+                              const capacity = Math.max(1, Math.floor(bodyMm / ONE_LINE_MM));
+                              const shown = twoLine || n <= capacity ? dayOrders : dayOrders.slice(0, capacity - 1);
+                              const hidden = n - shown.length;
                               return (
-                                <div
-                                  key={o.id}
+                                <td
+                                  key={dayIdx}
                                   style={{
-                                    fontSize: '7.5pt',
-                                    lineHeight: 1.2,
-                                    marginBottom: '1mm',
-                                    padding: '1mm',
                                     border: '1px solid #000',
-                                    backgroundColor: isCompleted ? '#e6f4ea' : isUrgent ? '#fce8e6' : '#e8f0fe'
+                                    height: `${rowMm}mm`,
+                                    verticalAlign: 'top',
+                                    padding: '1mm',
+                                    backgroundColor: !cell.isCurrentMonth ? '#f8fafc' : '#ffffff',
                                   }}
                                 >
-                                  <strong>{tag}</strong> [{pNo}] {o.itemName} ({o.quantity}개)
-                                </div>
+                                  <div style={{ height: `${rowMm - 2}mm`, overflow: 'hidden' }}>
+                                    {cell.dayNum && (
+                                      <div style={{ fontWeight: 'bold', fontSize: '8.5pt', lineHeight: '4mm', height: '4mm', color: dayIdx === 0 ? '#dc2626' : dayIdx === 6 ? '#2563eb' : '#000' }}>
+                                        {cell.dayNum}
+                                      </div>
+                                    )}
+                                    {shown.map(o => {
+                                      const { label, tone } = getDueTag(o);
+                                      const { bar, bg } = toneStyle(tone);
+                                      // "🚨 [납기 D-3]" → "D-3", "🚨 [납기 2일 지남]" → "2일 지남"
+                                      const tag = label.replace(/^[^[]*\[|\]$/g, '').replace(/^납기 (?=D-|\d)/, '');
+                                      const pNo = o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`;
+                                      return (
+                                        <div
+                                          key={o.id}
+                                          style={{
+                                            fontSize: '6.8pt',
+                                            lineHeight: '3mm',
+                                            padding: '0.3mm 0.8mm',
+                                            marginBottom: '0.5mm',
+                                            borderLeft: `0.9mm solid ${bar}`,
+                                            backgroundColor: bg,
+                                            overflow: 'hidden',
+                                            display: '-webkit-box',
+                                            WebkitBoxOrient: 'vertical',
+                                            WebkitLineClamp: twoLine ? 2 : 1,
+                                            wordBreak: 'break-all',
+                                          }}
+                                        >
+                                          <strong>{tag}</strong> {o.itemName} ({o.quantity}개) [{pNo}]
+                                        </div>
+                                      );
+                                    })}
+                                    {hidden > 0 && (
+                                      <div style={{ fontSize: '6.5pt', lineHeight: '3mm', fontWeight: 'bold', color: '#334155' }}>
+                                        + {hidden}건 더 (화면에서 확인)
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
                               );
                             })}
-                          </td>
+                          </tr>
                         );
                       })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                    </tbody>
+                  </table>
+                </>
+              );
+            })()}
           </div>
         ) : (
           <div className="orders-print-page">

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
+  OptionalPortal,
   Paper,
   Group,
   Text,
@@ -25,7 +26,12 @@ import {
   IconPackage,
   IconAlertCircle,
   IconChartBar,
+  IconMicrophone,
+  IconPlayerStopFilled,
+  IconVolume,
+  IconVolumeOff,
 } from '@tabler/icons-react';
+import { useMediaQuery } from '@mantine/hooks';
 
 interface Message {
   id: string;
@@ -33,6 +39,41 @@ interface Message {
   content: string;
   timestamp: string;
 }
+
+// ---- 음성 인식(말로 질문) / 음성 합성(답변 읽어주기) : 브라우저 내장 기능 사용 ----
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: ((e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  onend: (() => void) | null;
+}
+type RecognitionCtor = new () => SpeechRecognitionLike;
+
+function getRecognitionCtor(): RecognitionCtor | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as { SpeechRecognition?: RecognitionCtor; webkitSpeechRecognition?: RecognitionCtor };
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+}
+
+/** 화면용 답변을 소리로 읽기 좋게 다듬는다 (마크다운·이모지 제거, 너무 길면 줄임) */
+function toSpeech(text: string): string {
+  let t = text
+    .replace(/\*\*|__|`|#+\s/g, '')
+    .replace(/^\s*[*\-•]\s+/gm, '')
+    .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '')
+    .replace(/\s*\|\s*/g, ', ')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+  if (t.length > 700) t = `${t.slice(0, 700)}… 나머지는 화면에서 확인해 주세요.`;
+  return t;
+}
+
+const VOICE_PREF_KEY = 'tass-ai-read-aloud';
 
 export default function TassAiAssistant() {
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -51,6 +92,16 @@ export default function TassAiAssistant() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 음성
+  const isMobile = useMediaQuery('(max-width: 48em)');
+  const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [readAloud, setReadAloud] = useState<boolean>(
+    () => typeof window !== 'undefined' && window.localStorage.getItem(VOICE_PREF_KEY) === '1'
+  );
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const transcriptRef = useRef('');
+
   // Auto scroll to bottom when messages update
   useEffect(() => {
     if (scrollRef.current) {
@@ -63,16 +114,61 @@ export default function TassAiAssistant() {
 
   // Focus input when popover opens
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !isMobile) {
       setTimeout(() => {
         inputRef.current?.focus();
       }, 100);
     }
+  }, [isOpen, isMobile]);
+
+  // 창을 닫으면 듣기·읽기 중지
+  useEffect(() => {
+    if (!isOpen) {
+      recognitionRef.current?.abort();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+    }
   }, [isOpen]);
 
-  const handleSend = async (userPrompt?: string) => {
+  const stopSpeaking = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+    setSpeaking(false);
+  };
+
+  /** 답변을 소리로 읽기 (긴 글은 문장 단위로 나눠야 크롬에서 중간에 끊기지 않음) */
+  const speak = (text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const clean = toSpeech(text);
+    if (!clean) return;
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const koVoice = synth.getVoices().find((v) => v.lang?.toLowerCase().startsWith('ko'));
+    const parts = clean.split(/(?<=[.?!])\s+|\n+/).map((x) => x.trim()).filter(Boolean);
+    parts.forEach((part, i) => {
+      const u = new SpeechSynthesisUtterance(part);
+      u.lang = 'ko-KR';
+      u.rate = 1.05;
+      if (koVoice) u.voice = koVoice;
+      if (i === 0) u.onstart = () => setSpeaking(true);
+      if (i === parts.length - 1) {
+        u.onend = () => setSpeaking(false);
+        u.onerror = () => setSpeaking(false);
+      }
+      synth.speak(u);
+    });
+  };
+
+  const toggleReadAloud = () => {
+    const next = !readAloud;
+    setReadAloud(next);
+    window.localStorage.setItem(VOICE_PREF_KEY, next ? '1' : '0');
+    if (!next) stopSpeaking();
+  };
+
+  const handleSend = async (userPrompt?: string, opts?: { voice?: boolean }) => {
     const query = (userPrompt || input).trim();
     if (!query || loading) return;
+    const byVoice = opts?.voice === true;
+    stopSpeaking();
 
     const userMsgId = `user-${Date.now()}`;
     const assistantMsgId = `assistant-${Date.now()}`;
@@ -100,6 +196,7 @@ export default function TassAiAssistant() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          voice: byVoice,
           messages: [...messages, userMessage].map((m) => ({
             role: m.role,
             content: m.content,
@@ -130,6 +227,9 @@ export default function TassAiAssistant() {
           )
         );
       }
+
+      // 말로 물어본 질문, 또는 '답변 읽어주기'를 켰을 때는 소리로 읽어 준다
+      if (byVoice || readAloud) speak(accumulatedText);
     } catch (err: any) {
       console.error('Chat stream error:', err);
       setMessages((prev) =>
@@ -145,6 +245,62 @@ export default function TassAiAssistant() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSendRef = useRef(handleSend);
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  });
+
+  /** 마이크 버튼: 누르고 말하면 말이 끝날 때 자동으로 질문을 보낸다 */
+  const toggleListening = () => {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const Ctor = getRecognitionCtor();
+    if (!Ctor) {
+      alert('이 브라우저에서는 음성 인식을 쓸 수 없습니다. 휴대폰은 크롬(Chrome) 또는 사파리(Safari) 브라우저에서 사용해 주세요.');
+      return;
+    }
+    // 아이폰은 버튼을 누른 순간에 소리 재생을 한 번 허용해 둬야 나중에 답변을 읽을 수 있다
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+    }
+    setSpeaking(false);
+
+    const rec = new Ctor();
+    rec.lang = 'ko-KR';
+    rec.interimResults = true;
+    rec.continuous = false;
+    transcriptRef.current = '';
+    rec.onresult = (e) => {
+      let text = '';
+      for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+      transcriptRef.current = text;
+      setInput(text);
+    };
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        alert('마이크 사용이 막혀 있습니다. 브라우저 주소창 옆 설정에서 마이크를 허용해 주세요.');
+      }
+    };
+    rec.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+      const text = transcriptRef.current.trim();
+      if (text) void handleSendRef.current(text, { voice: true });
+    };
+    recognitionRef.current = rec;
+    setInput('');
+    setListening(true);
+    try {
+      rec.start();
+    } catch {
+      setListening(false);
+      recognitionRef.current = null;
     }
   };
 
@@ -171,16 +327,15 @@ export default function TassAiAssistant() {
       {/* Expanded Chat Window Popover (Opens Upward) */}
       <Transition transition="pop-bottom-left" duration={200} mounted={isOpen}>
         {(styles) => (
+          <OptionalPortal withinPortal={!!isMobile}>
           <Paper
             shadow="xl"
             radius="lg"
             style={{
               ...styles,
-              position: 'absolute',
-              bottom: 'calc(100% + 10px)',
-              left: 0,
-              width: '340px',
-              height: '480px',
+              ...(isMobile
+                ? { position: 'fixed', inset: 0, width: '100%', height: '100dvh', zIndex: 1000 }
+                : { position: 'absolute', bottom: 'calc(100% + 10px)', left: 0, width: '340px', height: '480px' }),
               backgroundColor: '#18181b', // Dark B&W monochrome theme
               color: '#ffffff',
               border: '1px solid #27272a',
@@ -188,7 +343,7 @@ export default function TassAiAssistant() {
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              borderRadius: '16px',
+              borderRadius: isMobile ? 0 : '16px',
             }}
           >
             {/* Header */}
@@ -231,6 +386,22 @@ export default function TassAiAssistant() {
               </Group>
 
               <Group gap={4}>
+                <Tooltip
+                  label={speaking ? '읽기 멈추기' : readAloud ? '답변 읽어주기 끄기' : '모든 답변 소리로 읽어주기'}
+                  position="top"
+                  withArrow
+                >
+                  <ActionIcon
+                    size="sm"
+                    variant={readAloud ? 'filled' : 'subtle'}
+                    color={readAloud ? 'blue' : 'gray'}
+                    onClick={speaking ? stopSpeaking : toggleReadAloud}
+                    style={{ borderRadius: '6px' }}
+                    aria-label="답변 읽어주기"
+                  >
+                    {speaking ? <IconPlayerStopFilled size={14} /> : readAloud ? <IconVolume size={14} /> : <IconVolumeOff size={14} />}
+                  </ActionIcon>
+                </Tooltip>
                 <Tooltip label="대화 내용 초기화" position="top" withArrow>
                   <ActionIcon
                     size="sm"
@@ -338,22 +509,38 @@ export default function TassAiAssistant() {
                   handleSend();
                 }}
               >
-                <Group gap={6}>
+                <Group gap={6} wrap="nowrap">
+                  <Tooltip label={listening ? '듣는 중 — 누르면 멈춤' : '말로 질문하기'} withArrow>
+                    <ActionIcon
+                      type="button"
+                      onClick={toggleListening}
+                      disabled={loading}
+                      size={isMobile ? 48 : 'md'}
+                      radius="xl"
+                      variant="filled"
+                      color={listening ? 'red' : 'blue'}
+                      className={listening ? 'animate-pulse' : undefined}
+                      aria-label="말로 질문하기"
+                      style={{ flexShrink: 0 }}
+                    >
+                      {listening ? <IconPlayerStopFilled size={isMobile ? 22 : 14} /> : <IconMicrophone size={isMobile ? 24 : 15} />}
+                    </ActionIcon>
+                  </Tooltip>
                   <TextInput
                     ref={inputRef}
-                    placeholder="질문을 입력하세요... (Enter 전송)"
+                    placeholder={listening ? '듣고 있어요… 말씀하세요' : '질문을 입력하세요... (Enter 전송)'}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     disabled={loading}
-                    size="xs"
-                    style={{ flex: 1 }}
+                    size={isMobile ? 'md' : 'xs'}
+                    style={{ flex: 1, minWidth: 0 }}
                     styles={{
                       input: {
                         backgroundColor: '#18181b',
                         color: '#ffffff',
                         borderColor: '#3f3f46',
                         borderRadius: '8px',
-                        fontSize: '12px',
+                        fontSize: isMobile ? '16px' : '12px',
                         '&:focus': {
                           borderColor: '#ffffff',
                         },
@@ -376,8 +563,14 @@ export default function TassAiAssistant() {
                   </ActionIcon>
                 </Group>
               </form>
+              {isMobile && (
+                <Text size="11px" c="gray.5" mt={6} ta="center">
+                  🎤 파란 마이크를 누르고 말씀하시면 답변을 소리로 읽어 드립니다
+                </Text>
+              )}
             </Box>
           </Paper>
+          </OptionalPortal>
         )}
       </Transition>
 
@@ -461,7 +654,7 @@ export default function TassAiAssistant() {
 
 // Helper: Bold parsing for markdown formatting
 function formatMarkdownText(text: string) {
-  const parts = text.split(/(\*\*.*?\*\*)/g);
+  const parts = text.replace(/^(\s*)[*-]\s+/gm, '$1• ').split(/(\*\*.*?\*\*)/g);
   return parts.map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return (

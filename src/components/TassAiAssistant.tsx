@@ -32,6 +32,8 @@ import {
   IconVolumeOff,
 } from '@tabler/icons-react';
 import { useMediaQuery } from '@mantine/hooks';
+import { useAuth } from '@/context/AuthContext';
+import { TASS_AI_OPEN_EVENT } from '@/lib/tassAi';
 
 interface Message {
   id: string;
@@ -75,8 +77,10 @@ function toSpeech(text: string): string {
 
 const VOICE_PREF_KEY = 'tass-ai-read-aloud';
 
-export default function TassAiAssistant() {
+export default function TassAiAssistant({ hideTriggerOnMobile = false }: { hideTriggerOnMobile?: boolean } = {}) {
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const { isAuthenticated, openAuthModal } = useAuth();
+  const pendingOpenRef = useRef(false);
   const [input, setInput] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -128,6 +132,36 @@ export default function TassAiAssistant() {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
     }
   }, [isOpen]);
+
+  /** 사내 DB를 답하는 비서라서, PIN 인증 전에는 먼저 PIN을 받고 연다 (홈 화면은 누구나 볼 수 있음) */
+  const requestOpen = () => {
+    if (!isAuthenticated) {
+      pendingOpenRef.current = true;
+      const here = window.location.pathname;
+      openAuthModal(here === '/' ? '/#ai' : here);
+      return;
+    }
+    setIsOpen(true);
+  };
+  const requestOpenRef = useRef(requestOpen);
+  useEffect(() => {
+    requestOpenRef.current = requestOpen;
+  });
+
+  // 다른 화면의 'AI 비서' 버튼이 보내는 신호
+  useEffect(() => {
+    const onOpen = () => requestOpenRef.current();
+    window.addEventListener(TASS_AI_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(TASS_AI_OPEN_EVENT, onOpen);
+  }, []);
+
+  // PIN 인증이 끝나면 기다리던 창을 연다
+  useEffect(() => {
+    if (isAuthenticated && pendingOpenRef.current) {
+      pendingOpenRef.current = false;
+      setIsOpen(true);
+    }
+  }, [isAuthenticated]);
 
   const stopSpeaking = () => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
@@ -578,7 +612,8 @@ export default function TassAiAssistant() {
       <Paper
         p="xs"
         radius="md"
-        onClick={() => setIsOpen(!isOpen)}
+        visibleFrom={hideTriggerOnMobile ? 'sm' : undefined}
+        onClick={() => (isOpen ? setIsOpen(false) : requestOpen())}
         style={{
           cursor: 'pointer',
           backgroundColor: isOpen ? '#18181b' : '#f8fafc',

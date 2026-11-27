@@ -112,6 +112,11 @@ input::-ms-clear {
     flex: 1 1 calc(50% - 6px) !important;
     justify-content: center !important;
   }
+
+  /* AI 비서 버튼은 '도면 드라이브 저장소' 옆 남은 자리에 들어가도록 글자 폭만큼만 */
+  .page-header-banner button.ai-banner-btn {
+    flex: 1 1 auto !important;
+  }
 }
 
 /* Form Inputs Styling */

@@ -11,6 +11,8 @@ import KeyProductsSection from '@/components/KeyProductsSection';
 import CustomerSupportSection from '@/components/CustomerSupportSection';
 import BgmPlayer from '@/components/BgmPlayer';
 import PWAInstallButton from '@/components/PWAInstallButton';
+import TassAiAssistant from '@/components/TassAiAssistant';
+import AiAssistantButton from '@/components/AiAssistantButton';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -161,7 +163,15 @@ export default function LandingPage() {
             </Button>
           </Group>
         </Group>
+
+        {/* 휴대폰: 오른쪽 위 AI 비서 버튼 */}
+        <AiAssistantButton look="header" hiddenFrom="sm" />
       </header>
+
+      {/* PC: 왼쪽 아래 AI 비서 (휴대폰은 위의 버튼으로 전체 화면 열기) */}
+      <div style={{ position: 'fixed', left: 24, bottom: 24, width: 270, zIndex: 150 }}>
+        <TassAiAssistant hideTriggerOnMobile />
+      </div>
 
       {/* SECTION 1: Hero Section (메인 비주얼) */}
       <div 

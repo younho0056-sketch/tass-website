@@ -17,6 +17,7 @@ import {
 } from '@tabler/icons-react';
 import * as XLSX from 'xlsx';
 import PageHeaderBanner from '@/components/PageHeaderBanner';
+import AiAssistantButton from '@/components/AiAssistantButton';
 import { useAuth } from '@/context/AuthContext';
 import OrderRow, { Order, ProcessStep } from '@/components/OrderRow';
 import OrderCard from '@/components/OrderCard';
@@ -948,6 +949,8 @@ export default function OrdersPage() {
           >
             도면 드라이브 저장소
           </Button>
+          {/* 휴대폰에서는 왼쪽 메뉴의 AI 비서가 안 보이므로 여기서 연다 */}
+          <AiAssistantButton hiddenFrom="sm" />
           <Button 
             variant="outline" 
             color="gray.0" 

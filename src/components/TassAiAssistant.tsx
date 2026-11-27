@@ -77,7 +77,10 @@ function toSpeech(text: string): string {
 
 const VOICE_PREF_KEY = 'tass-ai-read-aloud';
 
-export default function TassAiAssistant({ hideTriggerOnMobile = false }: { hideTriggerOnMobile?: boolean } = {}) {
+export default function TassAiAssistant({
+  hideTriggerOnMobile = false,
+  hideTrigger = false,
+}: { hideTriggerOnMobile?: boolean; hideTrigger?: boolean } = {}) {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const { isAuthenticated, openAuthModal } = useAuth();
   const pendingOpenRef = useRef(false);
@@ -608,7 +611,8 @@ export default function TassAiAssistant({ hideTriggerOnMobile = false }: { hideT
         )}
       </Transition>
 
-      {/* Mini Card Widget Trigger (Sidebar Bottom) */}
+      {/* Mini Card Widget Trigger (Sidebar Bottom) — 홈 화면은 로봇이 대신 연다 */}
+      {!hideTrigger && (
       <Paper
         p="xs"
         radius="md"
@@ -683,6 +687,7 @@ export default function TassAiAssistant({ hideTriggerOnMobile = false }: { hideT
           </ActionIcon>
         </Group>
       </Paper>
+      )}
     </Box>
   );
 }

@@ -13,6 +13,7 @@ import BgmPlayer from '@/components/BgmPlayer';
 import PWAInstallButton from '@/components/PWAInstallButton';
 import TassAiAssistant from '@/components/TassAiAssistant';
 import AiAssistantButton from '@/components/AiAssistantButton';
+import TassRobot from '@/components/TassRobot';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -168,10 +169,13 @@ export default function LandingPage() {
         <AiAssistantButton look="header" hiddenFrom="sm" />
       </header>
 
-      {/* PC: 왼쪽 아래 AI 비서 (휴대폰은 위의 버튼으로 전체 화면 열기) */}
+      {/* AI 비서 창 (PC: 왼쪽 아래에서 열림 / 휴대폰: 전체 화면). 여는 버튼은 TASS 로봇과 휴대폰 상단 버튼 */}
       <div style={{ position: 'fixed', left: 24, bottom: 24, width: 270, zIndex: 150 }}>
-        <TassAiAssistant hideTriggerOnMobile />
+        <TassAiAssistant hideTrigger />
       </div>
+
+      {/* PC: 화면 아래를 걸어 다니는 TASS 로봇 (누르면 AI 비서) */}
+      <TassRobot />
 
       {/* SECTION 1: Hero Section (메인 비주얼) */}
       <div 

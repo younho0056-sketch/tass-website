@@ -50,6 +50,17 @@ function getDaysRemaining(dueDateStr: string | null | undefined): number | null 
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
+/** 납기 캘린더 표시: 완료 / 납기 3일 이내·지남(빨강) / 그 외 */
+const DUE_SOON_DAYS = 3;
+function getDueTag(o: { status: string; dueDate: string | null }): { label: string; tone: 'done' | 'urgent' | 'normal' } {
+  if (o.status === '완료') return { label: '✅ [완료]', tone: 'done' };
+  const days = getDaysRemaining(o.dueDate);
+  if (days !== null && days < 0) return { label: `🚨 [납기 ${-days}일 지남]`, tone: 'urgent' };
+  if (days === 0) return { label: '🚨 [오늘 납기]', tone: 'urgent' };
+  if (days !== null && days <= DUE_SOON_DAYS) return { label: `🚨 [납기 D-${days}]`, tone: 'urgent' };
+  return { label: '🚚 [납기]', tone: 'normal' };
+}
+
 function formatCompactStepDate(dateStr?: string | null): string {
   if (!dateStr) return '';
   const trimmed = dateStr.trim();
@@ -165,7 +176,11 @@ export default function OrdersPage() {
 
   // View mode & Calendar State
   const [viewMode, setViewMode] = useState<'TABLE' | 'CALENDAR'>('TABLE');
-  const [calendarDate, setCalendarDate] = useState<Date>(new Date(2026, 7, 1));
+  // 캘린더는 항상 이번 달부터 보이도록 (12월이 되면 12월부터)
+  const [calendarDate, setCalendarDate] = useState<Date>(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
   const prevMonth = useCallback(() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)), []);
   const nextMonth = useCallback(() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)), []);
@@ -849,16 +864,17 @@ export default function OrdersPage() {
     });
   }, [orders, search, filterStatus, tabFilter, sortField, sortOrder]);
 
+  // 캘린더에는 납기일만 표시 (발주일은 표시하지 않음)
   const getOrdersForDate = useCallback((dateStr: string | null) => {
     if (!dateStr) return [];
-    return filteredOrders.filter(o => {
-      const isOrderDate = o.orderDate === dateStr;
-      const isDueDate = o.dueDate === dateStr;
-      return isOrderDate || isDueDate;
-    });
+    return filteredOrders.filter(o => o.dueDate === dateStr);
   }, [filteredOrders]);
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  // 오늘 날짜 (한국 시간 기준 — toISOString은 오전 9시 전에 어제 날짜가 됨)
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
   const docId = useMemo(() => Date.now().toString().slice(-6), []);
 
   const handleExportExcel = useCallback(() => {
@@ -1234,29 +1250,10 @@ export default function OrdersPage() {
 
                               <Stack gap={4}>
                                 {dayOrders.map(o => {
-                                  const isOrderDate = o.orderDate === cell.dateStr;
-                                  const isDueDate = o.dueDate === cell.dateStr;
-                                  const daysLeft = getDaysRemaining(o.dueDate);
-                                  const isCompleted = o.status === '완료';
-                                  const isUrgent = !isCompleted && daysLeft !== null && daysLeft <= 2;
+                                  const { label: prefix, tone } = getDueTag(o);
+                                  const badgeColor = tone === 'done' ? 'green' : tone === 'urgent' ? 'red' : 'blue';
+                                  const isCompleted = tone === 'done';
                                   const pNo = o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`;
-
-                                  let prefix = '📦 [발주]';
-                                  let badgeColor = 'blue';
-
-                                  if (isCompleted) {
-                                    prefix = '✅ [완료]';
-                                    badgeColor = 'green';
-                                  } else if (isDueDate && isUrgent) {
-                                    prefix = '🚨 [납기]';
-                                    badgeColor = 'red';
-                                  } else if (isDueDate) {
-                                    prefix = '🚚 [납품]';
-                                    badgeColor = 'blue';
-                                  } else if (isOrderDate) {
-                                    prefix = '📦 [발주]';
-                                    badgeColor = 'blue';
-                                  }
 
                                   return (
                                     <Tooltip
@@ -2268,12 +2265,9 @@ export default function OrdersPage() {
                               </div>
                             )}
                             {dayOrders.map(o => {
-                              const isOrderDate = o.orderDate === cell.dateStr;
-                              const isDueDate = o.dueDate === cell.dateStr;
-                              const isCompleted = o.status === '완료';
-                              const daysLeft = getDaysRemaining(o.dueDate);
-                              const isUrgent = !isCompleted && daysLeft !== null && daysLeft <= 2;
-                              const tag = isCompleted ? '[완료]' : isUrgent ? '[🚨납기]' : isDueDate ? '[🚚납품]' : '[📦발주]';
+                              const { label: tag, tone } = getDueTag(o);
+                              const isCompleted = tone === 'done';
+                              const isUrgent = tone === 'urgent';
                               const pNo = o.projectNo || `PRJ-${String(o.id).padStart(3, '0')}`;
                               
                               return (

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { openTassAi } from '@/lib/tassAi';
 import { robotState, ROBOT_GREET_EVENT, ROBOT_WAKE_EVENT } from '@/lib/robotBus';
 import { useRobotWalker } from './useRobotWalker';
+import TarsBody, { TB_W, TB_H } from './TarsBody';
 
 /**
  * 선임 TASS 로봇 — PC 홈 화면 아래쪽을 걸어 다니고, 졸기도 하고, 놀기도 한다.
@@ -12,8 +13,8 @@ import { useRobotWalker } from './useRobotWalker';
 
 type Mode = 'walk' | 'idle' | 'doze' | 'play';
 
-const W = 64; // 로봇 폭(px)
-const H = 128;
+const W = TB_W; // 로봇 폭(px) — 후임과 같은 몸체, 색만 다름
+const H = TB_H;
 const SPEED = 38; // 걷는 속도(px/초)
 
 const LINES: Record<'idle' | 'doze' | 'play', string[]> = {
@@ -120,9 +121,7 @@ export default function TassRobot() {
     openTassAi();
   };
 
-  const face: 'happy' | 'sleep' | 'normal' =
-    hover || poked || dragging || mode === 'play' ? 'happy' : mode === 'doze' ? 'sleep' : 'normal';
-  const eyeShift = facing * 2;
+  const face = dragging ? '>_<' : poked ? '!' : hover || mode === 'play' ? '^_^' : mode === 'doze' ? '-_-' : '■_■';
   const bodyClass = dragging ? 'dragged' : landing ? 'landing' : poked ? 'poke' : hover ? 'hover' : mode;
 
   return (
@@ -130,7 +129,7 @@ export default function TassRobot() {
       <style>{CSS}</style>
 
       {bubble && <div className="tassbot-bubble">{bubble}</div>}
-      {face === 'sleep' && (
+      {mode === 'doze' && !hover && !dragging && (
         <div className="tassbot-zzz" aria-hidden>
           <span>z</span>
           <span>Z</span>
@@ -149,87 +148,7 @@ export default function TassRobot() {
         onClick={onClick}
         aria-label="TASS 로봇 — 눌러서 AI 비서에게 물어보기"
       >
-        <svg width={W} height={128} viewBox="0 0 64 128" className={`tassbot-body ${bodyClass}`}>
-          <defs>
-            <linearGradient id="tassbot-metal" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stopColor="#5b6470" />
-              <stop offset="0.45" stopColor="#3a414b" />
-              <stop offset="1" stopColor="#22272e" />
-            </linearGradient>
-            <linearGradient id="tassbot-shine" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="rgba(255,255,255,0.18)" />
-              <stop offset="0.5" stopColor="rgba(255,255,255,0)" />
-            </linearGradient>
-          </defs>
-
-          {/* 발 (걸을 때 번갈아 들썩) */}
-          <rect className="tassbot-foot left" x="8" y="111" width="22" height="13" rx="1.5" fill="#2a3038" stroke="#14171b" />
-          <rect className="tassbot-foot right" x="34" y="111" width="22" height="13" rx="1.5" fill="#2a3038" stroke="#14171b" />
-
-          {/* 몸통: 길쭉한 금속 판넬 */}
-          <rect x="4" y="3" width="56" height="110" rx="3" fill="url(#tassbot-metal)" stroke="#14171b" strokeWidth="1.2" />
-          <rect x="4" y="3" width="56" height="110" rx="3" fill="url(#tassbot-shine)" />
-          {/* 판넬 홈 */}
-          <g stroke="#1a1e23" strokeWidth="0.8" opacity="0.9">
-            <line x1="4" y1="38" x2="60" y2="38" />
-            <line x1="4" y1="76" x2="60" y2="76" />
-            <line x1="32" y1="38" x2="32" y2="113" />
-            <line x1="11" y1="38" x2="11" y2="113" opacity="0.5" />
-            <line x1="53" y1="38" x2="53" y2="113" opacity="0.5" />
-          </g>
-          <g stroke="rgba(255,255,255,0.08)" strokeWidth="0.6">
-            <line x1="4.6" y1="39" x2="59.4" y2="39" />
-            <line x1="4.6" y1="77" x2="59.4" y2="77" />
-          </g>
-
-          {/* 얼굴 화면 */}
-          <rect x="10" y="9" width="44" height="24" rx="2.5" fill="#07110c" stroke="#26342c" />
-          <g fill="#4ade80" transform={`translate(${eyeShift} 0)`}>
-            {face === 'normal' && (
-              <g className="tassbot-eyes">
-                <rect x="19" y="15" width="7" height="7" rx="1.5" />
-                <rect x="38" y="15" width="7" height="7" rx="1.5" />
-              </g>
-            )}
-            {face === 'sleep' && (
-              <g>
-                <rect x="18" y="19" width="9" height="1.8" rx="0.9" />
-                <rect x="37" y="19" width="9" height="1.8" rx="0.9" />
-              </g>
-            )}
-            {face === 'happy' && (
-              <g fill="none" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18.5 21 L22.5 16.5 L26.5 21" />
-                <path d="M37.5 21 L41.5 16.5 L45.5 21" />
-              </g>
-            )}
-          </g>
-          <text x="32" y="30.5" textAnchor="middle" fontSize="3.6" fontFamily="monospace" fill="#22c55e" opacity="0.85">
-            {mode === 'doze' && !hover ? 'SLEEP MODE' : mode === 'play' ? 'PLAY ♪' : 'TASS AI ONLINE'}
-          </text>
-
-          {/* 세로 TASS 글자 */}
-          <g fill="#f59e0b" fontSize="11" fontWeight="900" fontFamily="Arial, sans-serif" textAnchor="middle">
-            <text x="21.5" y="53">T</text>
-            <text x="21.5" y="65">A</text>
-            <text x="21.5" y="77">S</text>
-            <text x="21.5" y="89">S</text>
-          </g>
-          {/* 작은 표시등 점 */}
-          <g fill="#f59e0b" opacity="0.75">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <circle key={i} cx={39 + (i % 2) * 5} cy={47 + Math.floor(i / 2) * 5} r="1.1" className={`tassbot-led led${i}`} />
-            ))}
-          </g>
-          {/* 아래 통풍구 */}
-          <rect x="16" y="94" width="32" height="12" rx="1" fill="#15191e" stroke="#0d1013" />
-          <g stroke="#2b3138" strokeWidth="0.8">
-            {[97, 100, 103].map((y) => (
-              <line key={y} x1="19" y1={y} x2="45" y2={y} />
-            ))}
-          </g>
-        </svg>
-        <div className="tassbot-shadow" aria-hidden />
+        <TarsBody variant="senior" face={face} anim={bodyClass} facing={facing} />
       </button>
     </div>
   );
@@ -252,100 +171,13 @@ const CSS = `
   display: block;
   position: relative;
   width: ${W}px;
+  height: ${H}px;
 }
 .tassbot-btn:focus-visible { outline: 2px solid #60a5fa; outline-offset: 4px; border-radius: 6px; }
-.tassbot-body { display: block; overflow: visible; transform-origin: 50% 100%; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.35)); }
-.tassbot-shadow {
-  position: absolute; left: 6px; right: 6px; bottom: -6px; height: 8px;
-  background: radial-gradient(ellipse at center, rgba(0,0,0,0.45), rgba(0,0,0,0) 70%);
-  z-index: -1;
-}
-
-/* 걷기: 좌우로 뒤뚱 + 발 번갈아 */
-.tassbot-body.walk { animation: tassbot-waddle 0.7s ease-in-out infinite; }
-.tassbot-body.walk .tassbot-foot.left { animation: tassbot-step 0.7s ease-in-out infinite; }
-.tassbot-body.walk .tassbot-foot.right { animation: tassbot-step 0.7s ease-in-out infinite 0.35s; }
-@keyframes tassbot-waddle {
-  0%, 100% { transform: rotate(-3.5deg) translateY(0); }
-  50% { transform: rotate(3.5deg) translateY(-2px); }
-}
-@keyframes tassbot-step {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
-}
-
-/* 쉬기: 살짝 숨쉬기 */
-.tassbot-body.idle { animation: tassbot-bob 2.6s ease-in-out infinite; }
-@keyframes tassbot-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-1.5px); }
-}
-
-/* 졸기: 천천히 꾸벅꾸벅 */
-.tassbot-body.doze { animation: tassbot-nod 3.2s ease-in-out infinite; }
-@keyframes tassbot-nod {
-  0%, 100% { transform: rotate(-2deg); }
-  45% { transform: rotate(4deg) translateY(1px); }
-  55% { transform: rotate(4deg) translateY(1px); }
-}
-
-/* 놀기: 점프 → 한 바퀴 → 흔들흔들 */
-.tassbot-body.play { animation: tassbot-play 3.2s ease-in-out 1; transform-origin: 50% 55%; }
-@keyframes tassbot-play {
-  0% { transform: translateY(0); }
-  15% { transform: translateY(-30px) rotate(0deg); }
-  35% { transform: translateY(-30px) rotate(360deg); }
-  48% { transform: translateY(0) rotate(360deg); }
-  58% { transform: translateY(-12px) rotate(360deg); }
-  66% { transform: translateY(0) rotate(360deg); }
-  74% { transform: rotate(352deg); }
-  82% { transform: rotate(368deg); }
-  90% { transform: rotate(354deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* 끌려가는 중: 대롱대롱 / 놓으면 통통 착지 */
-.tassbot-btn:active { cursor: grabbing; }
-.tassbot-body.dragged { animation: tassbot-dangle 0.5s ease-in-out infinite; transform-origin: 50% 0%; }
-.tassbot-body.dragged .tassbot-foot.left { animation: tassbot-step 0.25s ease-in-out infinite; }
-.tassbot-body.dragged .tassbot-foot.right { animation: tassbot-step 0.25s ease-in-out infinite 0.12s; }
-@keyframes tassbot-dangle {
-  0%, 100% { transform: rotate(-7deg); }
-  50% { transform: rotate(7deg); }
-}
-.tassbot-body.landing { animation: tassbot-land 0.45s ease-out 1; }
-@keyframes tassbot-land {
-  0% { transform: scale(1.08, 0.86); }
-  45% { transform: translateY(-8px) scale(0.96, 1.05); }
-  100% { transform: translateY(0) scale(1); }
-}
-
-/* 마우스 올리면 반가워하기 / 누르면 깡총 */
-.tassbot-body.hover { transform: translateY(-4px) scale(1.06); transition: transform 0.2s; }
-.tassbot-body.poke { animation: tassbot-poke 0.6s ease-out 1; }
-@keyframes tassbot-poke {
-  0% { transform: translateY(0) scale(1); }
-  40% { transform: translateY(-16px) scale(1.08); }
-  100% { transform: translateY(0) scale(1); }
-}
-
-/* 눈 깜빡임 */
-.tassbot-eyes { transform-box: fill-box; transform-origin: center; animation: tassbot-blink 4.2s infinite; }
-@keyframes tassbot-blink {
-  0%, 92%, 100% { transform: scaleY(1); }
-  95% { transform: scaleY(0.1); }
-}
-
-/* 표시등 깜빡 */
-.tassbot-led { animation: tassbot-led 1.8s infinite; }
-.tassbot-led.led1 { animation-delay: 0.3s; } .tassbot-led.led2 { animation-delay: 0.6s; }
-.tassbot-led.led3 { animation-delay: 0.9s; } .tassbot-led.led4 { animation-delay: 1.2s; } .tassbot-led.led5 { animation-delay: 1.5s; }
-@keyframes tassbot-led { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
-
 /* 말풍선 */
 .tassbot-bubble {
   position: absolute;
-  bottom: 142px;
+  bottom: ${H + 14}px;
   left: 50%;
   transform: translateX(-50%);
   background: #ffffff;
@@ -367,7 +199,7 @@ const CSS = `
 @keyframes tassbot-pop { from { opacity: 0; transform: translateX(-50%) translateY(6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 
 /* 졸 때 zZ */
-.tassbot-zzz { position: absolute; left: 46px; bottom: 112px; pointer-events: none; color: #e2e8f0; font-weight: 900; text-shadow: 0 2px 6px rgba(0,0,0,0.5); }
+.tassbot-zzz { position: absolute; left: 48px; bottom: ${H - 6}px; pointer-events: none; color: #e2e8f0; font-weight: 900; text-shadow: 0 2px 6px rgba(0,0,0,0.5); }
 .tassbot-zzz span { position: absolute; animation: tassbot-z 2.4s ease-in infinite; opacity: 0; }
 .tassbot-zzz span:nth-child(1) { font-size: 11px; animation-delay: 0s; }
 .tassbot-zzz span:nth-child(2) { font-size: 15px; animation-delay: 0.8s; }
@@ -379,6 +211,6 @@ const CSS = `
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tassbot-body, .tassbot-foot, .tassbot-eyes, .tassbot-led, .tassbot-zzz span { animation: none !important; }
+  .tassbot-zzz span { animation: none !important; }
 }
 `;

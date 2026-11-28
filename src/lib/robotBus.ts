@@ -2,8 +2,8 @@
 export type RobotName = 'senior' | 'junior';
 
 export const robotState: Record<RobotName, { x: number; width: number; mode: string }> = {
-  senior: { x: -999, width: 64, mode: 'idle' },
-  junior: { x: -999, width: 66, mode: 'idle' },
+  senior: { x: -999, width: 65, mode: 'idle' },
+  junior: { x: -999, width: 65, mode: 'idle' },
 };
 
 /** 후임이 선임에게 보내는 신호 */

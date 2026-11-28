@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { robotState, ROBOT_GREET_EVENT, ROBOT_WAKE_EVENT } from '@/lib/robotBus';
 import { setPendingEstimateFiles } from '@/lib/pendingUploads';
 import { todayString } from '@/lib/estimateFiles';
 import { useRobotWalker } from './useRobotWalker';
+import TarsBody, { TB_W, TB_H } from './TarsBody';
 
 /**
  * 후임 로봇 TASS JR. — 판넬 4장이 번갈아 휘두르며 걷는 입체 로봇.
@@ -16,13 +17,8 @@ import { useRobotWalker } from './useRobotWalker';
 
 type Mode = 'walk' | 'idle' | 'alert' | 'spin' | 'stretch';
 
-// 판넬 크기 (바깥 2장은 좁고, 안쪽 2장은 넓다)
-const SLABS = [13, 18, 18, 13];
-const GAP = 1;
-const SH = 112; // 높이
-const SD = 12; // 두께
-const W = SLABS.reduce((a, b) => a + b, 0) + GAP * (SLABS.length - 1);
-const H = SH + 8;
+const W = TB_W;
+const H = TB_H;
 const SPEED = 30;
 
 type Order = { status: string; dueDate: string | null; itemName: string; partnerName: string; projectNo?: string | null };
@@ -315,7 +311,6 @@ export default function TassJunior() {
 
   const face = fileOver ? '?' : dragging ? '>_<' : hover || mode === 'spin' ? '^_^' : mode === 'alert' ? '!' : mode === 'stretch' ? 'o_o' : '•_•';
   const animClass = dragging ? 'dragged' : landing ? 'landing' : fileOver ? 'alert' : mode;
-  const turnDeg = facing === 1 ? 42 : -42;
 
   return (
     <>
@@ -340,48 +335,7 @@ export default function TassJunior() {
         onClick={onClick}
         aria-label="후임 로봇 TASS JR. — 눌러서 오늘 브리핑 보기"
       >
-        <div className="jr-stage">
-          <div className="jr-turn" style={{ transform: `rotateY(${turnDeg}deg)` }}>
-            <div className={`jr-anim ${animClass}`}>
-              {SLABS.map((w, i) => {
-                const left = SLABS.slice(0, i).reduce((a, b) => a + b, 0) + GAP * i;
-                const style = { left, width: w, '--hw': `${w / 2}px` } as CSSProperties;
-                return (
-                  <div key={i} className={`jr-slab s${i}`} style={style}>
-                    <div className="f front">
-                      {i === 1 && (
-                        <>
-                          <div className="jr-screen">
-                            <span>{face}</span>
-                          </div>
-                          <div className="jr-name">
-                            <b>J</b>
-                            <b>R</b>
-                          </div>
-                        </>
-                      )}
-                      {i === 2 && (
-                        <div className="jr-tass">
-                          <b>T</b>
-                          <b>A</b>
-                          <b>S</b>
-                          <b>S</b>
-                        </div>
-                      )}
-                      {(i === 0 || i === 3) && <div className="jr-leds"><i /><i /><i /></div>}
-                    </div>
-                    <div className="f back" />
-                    <div className="f left" />
-                    <div className="f right" />
-                    <div className="f top" />
-                    <div className="f bottom" />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-        <div className="jr-shadow" aria-hidden />
+        <TarsBody variant="junior" face={face} anim={animClass} facing={facing} />
       </button>
     </div>
 
@@ -432,92 +386,6 @@ const CSS = `
 .jr-btn:active { cursor: grabbing; }
 .jr-btn:focus-visible { outline: 2px solid #22d3ee; outline-offset: 4px; border-radius: 6px; }
 
-.jr-stage { position: absolute; inset: 0; perspective: 520px; perspective-origin: 50% 40%; }
-.jr-turn { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 0.7s cubic-bezier(.4,1.4,.6,1); }
-.jr-anim { position: absolute; inset: 0; transform-style: preserve-3d; transform-origin: 50% 60%; }
-
-/* 판넬(직육면체) 하나 */
-.jr-slab { position: absolute; top: 0; height: ${SH}px; transform-style: preserve-3d; transform-origin: 50% 28%; }
-.jr-slab .f { position: absolute; box-sizing: border-box; }
-.jr-slab .front {
-  width: 100%; height: 100%;
-  transform: translateZ(${SD / 2}px);
-  background: linear-gradient(180deg, #9aa6b6 0%, #7d8899 40%, #5f6a7a 100%);
-  border: 1px solid #2d333c;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
-  background-image:
-    linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0) 30%),
-    repeating-linear-gradient(180deg, transparent 0 27px, rgba(20,24,30,0.55) 27px 28px),
-    linear-gradient(180deg, #9aa6b6 0%, #7d8899 40%, #5f6a7a 100%);
-}
-.jr-slab .back { width: 100%; height: 100%; transform: rotateY(180deg) translateZ(${SD / 2}px); background: #3d4550; border: 1px solid #23282f; }
-.jr-slab .left, .jr-slab .right {
-  width: ${SD}px; height: 100%; left: calc(50% - ${SD / 2}px);
-  background: linear-gradient(180deg, #59636f, #3a414b);
-  border: 1px solid #23282f;
-}
-.jr-slab .right { transform: rotateY(90deg) translateZ(var(--hw)); }
-.jr-slab .left { transform: rotateY(-90deg) translateZ(var(--hw)); }
-.jr-slab .top, .jr-slab .bottom { width: 100%; height: ${SD}px; top: calc(50% - ${SD / 2}px); }
-.jr-slab .top { transform: rotateX(90deg) translateZ(${SH / 2}px); background: #b8c2cf; border: 1px solid #5d6672; }
-.jr-slab .bottom { transform: rotateX(-90deg) translateZ(${SH / 2}px); background: #262b32; }
-
-/* 얼굴 화면 / 이름 */
-.jr-screen {
-  position: absolute; left: 2px; right: 2px; top: 6px; height: 16px;
-  background: #041016; border: 1px solid #12303a; border-radius: 2px;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 6px rgba(34,211,238,0.35);
-}
-.jr-screen span { color: #22d3ee; font: 700 8px/1 monospace; letter-spacing: -0.5px; text-shadow: 0 0 4px rgba(34,211,238,0.9); white-space: nowrap; }
-.jr-name, .jr-tass { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; }
-.jr-name { top: 30px; }
-.jr-name b { color: #22d3ee; font: 900 9px/1 Arial, sans-serif; text-shadow: 0 0 3px rgba(34,211,238,0.6); }
-.jr-tass { top: 12px; }
-.jr-tass b { color: #f59e0b; font: 900 9.5px/1.05 Arial, sans-serif; }
-.jr-leds { position: absolute; top: 10px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.jr-leds i { width: 3px; height: 3px; border-radius: 50%; background: #22d3ee; opacity: 0.3; animation: jr-led 1.6s infinite; }
-.jr-leds i:nth-child(2) { animation-delay: 0.4s; } .jr-leds i:nth-child(3) { animation-delay: 0.8s; }
-@keyframes jr-led { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
-
-.jr-shadow { position: absolute; left: 2px; right: 2px; bottom: -6px; height: 9px; background: radial-gradient(ellipse at center, rgba(0,0,0,0.5), rgba(0,0,0,0) 70%); }
-
-/* 걷기: 바깥 판넬 2장 ↔ 안쪽 판넬 2장이 번갈아 앞뒤로 휘두르며 */
-.jr-anim.walk { animation: jr-bob 0.55s ease-in-out infinite; }
-.jr-anim.walk .s0, .jr-anim.walk .s3 { animation: jr-swing-a 1.1s ease-in-out infinite; }
-.jr-anim.walk .s1, .jr-anim.walk .s2 { animation: jr-swing-b 1.1s ease-in-out infinite; }
-@keyframes jr-swing-a { 0%, 100% { transform: rotateX(18deg); } 50% { transform: rotateX(-18deg); } }
-@keyframes jr-swing-b { 0%, 100% { transform: rotateX(-12deg); } 50% { transform: rotateX(12deg); } }
-@keyframes jr-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-
-/* 대기 */
-.jr-anim.idle { animation: jr-idle 3s ease-in-out infinite; }
-@keyframes jr-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
-
-/* 알림: 깡총 + 판넬 들썩 */
-.jr-anim.alert { animation: jr-hop 0.9s ease-in-out 2; }
-.jr-anim.alert .s0, .jr-anim.alert .s3 { animation: jr-flap 0.45s ease-in-out 4; }
-@keyframes jr-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-14px); } }
-@keyframes jr-flap { 0%, 100% { transform: rotateX(0deg); } 50% { transform: rotateX(-28deg); } }
-
-/* 빙글 한 바퀴 (입체로) */
-.jr-anim.spin { animation: jr-spin 1.8s cubic-bezier(.5,0,.5,1) 1; }
-@keyframes jr-spin { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(360deg); } }
-
-/* 기지개: 판넬을 펼쳤다 모으기 */
-.jr-anim.stretch .s0 { animation: jr-open-l 2.4s ease-in-out 1; }
-.jr-anim.stretch .s3 { animation: jr-open-r 2.4s ease-in-out 1; }
-@keyframes jr-open-l { 0%, 100% { transform: rotateZ(0deg); } 40%, 60% { transform: rotateZ(-35deg); } }
-@keyframes jr-open-r { 0%, 100% { transform: rotateZ(0deg); } 40%, 60% { transform: rotateZ(35deg); } }
-
-/* 끌려가는 중 / 착지 */
-.jr-anim.dragged { animation: jr-dangle 0.45s ease-in-out infinite; transform-origin: 50% 0%; }
-.jr-anim.dragged .s0, .jr-anim.dragged .s3 { animation: jr-swing-a 0.3s ease-in-out infinite; }
-.jr-anim.dragged .s1, .jr-anim.dragged .s2 { animation: jr-swing-b 0.3s ease-in-out infinite; }
-@keyframes jr-dangle { 0%, 100% { transform: rotateZ(-6deg); } 50% { transform: rotateZ(6deg); } }
-.jr-anim.landing { animation: jr-land 0.5s ease-out 1; }
-@keyframes jr-land { 0% { transform: scale(1.06, 0.88); } 45% { transform: translateY(-8px); } 100% { transform: none; } }
-
 /* 말풍선 */
 .jr-bubble {
   position: absolute; bottom: ${H + 14}px; left: 50%; transform: translateX(-50%);
@@ -556,8 +424,4 @@ const CSS = `
 .jr-card-foot button:last-child { background: #1e293b; color: #cbd5e1; }
 .jr-card-tip { margin-top: 8px; font-size: 11px; color: #94a3b8; }
 
-@media (prefers-reduced-motion: reduce) {
-  .jr-anim, .jr-slab, .jr-leds i { animation: none !important; }
-  .jr-turn { transition: none; }
-}
 `;

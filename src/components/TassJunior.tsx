@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { robotState, ROBOT_GREET_EVENT, ROBOT_WAKE_EVENT } from '@/lib/robotBus';
 import { setPendingEstimateFiles } from '@/lib/pendingUploads';
-import { todayString } from '@/lib/estimateFiles';
+import { buildBriefing, briefingKey, kstDayRange, kstToday, type Briefing } from '@/lib/briefing';
 import { useRobotWalker } from './useRobotWalker';
 import TarsBody, { TB_W, TB_H } from './TarsBody';
 
@@ -21,80 +21,45 @@ const W = TB_W;
 const H = TB_H;
 const SPEED = 30;
 
-type Order = { status: string; dueDate: string | null; itemName: string; partnerName: string; projectNo?: string | null };
-type Schedule = { title: string; startDate: string; isAllDay?: boolean };
-type BriefRow = { key: string; icon: string; label: string; detail?: string; href: string; urgent?: boolean };
-
 const pick = (list: string[]) => list[Math.floor(Math.random() * list.length)];
 
-function daysUntil(dateStr: string | null): number | null {
-  const m = dateStr?.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return null;
-  const target = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.round((target.getTime() - today.getTime()) / 86400000);
-}
-
-async function loadBriefing(): Promise<{ rows: BriefRow[]; lines: string[] }> {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString();
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
+/** 오늘 브리핑 — 홈 화면에서 PIN 없이도 보인다 (화면 이동은 PIN 필요) */
+async function loadBriefing(): Promise<Briefing> {
+  const today = kstToday();
+  const { start, end } = kstDayRange(today);
   const [ordersRes, schedRes, filesRes] = await Promise.all([
     fetch('/api/orders').then((r) => r.json()).catch(() => ({})),
     fetch(`/api/schedules?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`).then((r) => r.json()).catch(() => ({})),
     fetch('/api/estimate-files').then((r) => r.json()).catch(() => ({})),
   ]);
-
-  const orders: Order[] = (Array.isArray(ordersRes.orders) ? ordersRes.orders : []).filter((o: Order) => o.status !== '완료');
-  const withDays = orders.map((o) => ({ o, d: daysUntil(o.dueDate) })).filter((x) => x.d !== null) as { o: Order; d: number }[];
-  const overdue = withDays.filter((x) => x.d < 0).sort((a, b) => a.d - b.d);
-  const today = withDays.filter((x) => x.d === 0);
-  const soon = withDays.filter((x) => x.d >= 1 && x.d <= 3).sort((a, b) => a.d - b.d);
-  const schedules: Schedule[] = Array.isArray(schedRes.schedules) ? schedRes.schedules : [];
-  const waiting = (Array.isArray(filesRes.files) ? filesRes.files : []).filter((f: { status: string }) => f.status === '견적중');
-
-  const rows: BriefRow[] = [];
-  const lines: string[] = [];
-  if (today.length) {
-    rows.push({ key: 'today', icon: '⏰', label: `오늘 납기 ${today.length}건`, detail: today.map((x) => x.o.itemName).slice(0, 2).join(', '), href: '/orders', urgent: true });
-    lines.push(`오늘 납기 ${today.length}건! ${today[0].o.itemName}`);
-  }
-  if (overdue.length) {
-    rows.push({ key: 'overdue', icon: '🚨', label: `납기 지난 수주 ${overdue.length}건`, detail: `${overdue[0].o.itemName} (${-overdue[0].d}일 지남)${overdue.length > 1 ? ' 외' : ''}`, href: '/orders', urgent: true });
-    lines.push(`납기 지난 수주가 ${overdue.length}건 있어요`);
-  }
-  if (soon.length) {
-    rows.push({ key: 'soon', icon: '📦', label: `3일 안에 납기 ${soon.length}건`, detail: soon.map((x) => `${x.o.itemName}(D-${x.d})`).slice(0, 2).join(', '), href: '/orders' });
-    lines.push(`3일 안에 납기 ${soon.length}건이에요`);
-  }
-  if (schedules.length) {
-    rows.push({ key: 'sched', icon: '🗓', label: `오늘 일정 ${schedules.length}건`, detail: schedules.map((s) => s.title).slice(0, 2).join(', '), href: '/calendar' });
-    lines.push(`오늘 일정: ${schedules[0].title}${schedules.length > 1 ? ` 외 ${schedules.length - 1}건` : ''}`);
-  }
-  if (waiting.length) {
-    rows.push({ key: 'est', icon: '📄', label: `회신 기다리는 견적서 ${waiting.length}건`, href: '/estimates' });
-    lines.push(`회신 기다리는 견적서 ${waiting.length}건 있어요`);
-  }
-  if (rows.length === 0) lines.push('오늘은 급한 일 없어요 👍');
-  return { rows, lines };
+  return buildBriefing(
+    Array.isArray(ordersRes.orders) ? ordersRes.orders : [],
+    Array.isArray(schedRes.schedules) ? schedRes.schedules : [],
+    Array.isArray(filesRes.files) ? filesRes.files : [],
+    today
+  );
 }
 
-function speakKo(text: string) {
+/** 서버 음성을 못 쓸 때 브라우저 목소리로 (조금 낮고 빠르게 해서 막내 남자 느낌) */
+function speakFallback(text: string) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   const synth = window.speechSynthesis;
   synth.cancel();
-  const voice = synth.getVoices().find((v) => v.lang?.toLowerCase().startsWith('ko'));
-  text
-    .split(/(?<=[.!?])\s+/)
-    .filter(Boolean)
-    .forEach((part) => {
-      const u = new SpeechSynthesisUtterance(part);
-      u.lang = 'ko-KR';
-      u.rate = 1.05;
-      if (voice) u.voice = voice;
-      synth.speak(u);
-    });
+  const voices = synth.getVoices().filter((v) => v.lang?.toLowerCase().startsWith('ko'));
+  const male = voices.find((v) => /injoon|minsu|male|남/i.test(v.name));
+  window.setTimeout(() => {
+    text
+      .split(/(?<=[.!?~])\s+/)
+      .filter(Boolean)
+      .forEach((part) => {
+        const u = new SpeechSynthesisUtterance(part);
+        u.lang = 'ko-KR';
+        u.rate = 1.12;
+        u.pitch = male ? 1.1 : 0.8;
+        if (male || voices[0]) u.voice = (male || voices[0]) as SpeechSynthesisVoice;
+        synth.speak(u);
+      });
+  }, 60);
 }
 
 export default function TassJunior() {
@@ -105,7 +70,15 @@ export default function TassJunior() {
   const [hover, setHover] = useState(false);
   const [fileOver, setFileOver] = useState(false);
   const [landing, setLanding] = useState(false);
-  const [brief, setBrief] = useState<{ rows: BriefRow[]; lines: string[] } | null>(null);
+  const [brief, setBrief] = useState<Briefing | null>(null);
+  const [voiceState, setVoiceState] = useState<'idle' | 'loading' | 'playing'>('idle');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const voiceRef = useRef<{ key: string; url: string } | null>(null);
+  const voiceJob = useRef<{ key: string; promise: Promise<string | null> } | null>(null);
+  const isAuthRef = useRef(isAuthenticated);
+  useEffect(() => {
+    isAuthRef.current = isAuthenticated;
+  });
   const [card, setCard] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -145,19 +118,19 @@ export default function TassJunior() {
     setMode(m);
   };
 
-  // 브리핑 데이터 (PIN 인증 후에만, 5분마다 새로)
+  // 브리핑 데이터 (PIN 없이도 보이게, 5분마다 새로)
   useEffect(() => {
-    if (!isAuthenticated) return;
     let alive = true;
     const load = () =>
       loadBriefing().then((b) => {
         if (!alive) return;
         setBrief(b);
-        // 하루 첫 방문이면 아침 브리핑 카드를 한 번 펼친다
+        if (isAuthRef.current) void prepareVoice(b); // 직원 PC는 목소리를 미리 받아 둬서 바로 재생
+        // 직원(PIN 인증)이 PC로 하루 처음 열면 아침 브리핑 카드를 한 번 펼친다
         const key = 'tassjr-briefing-date';
         const isPc = window.matchMedia('(min-width: 48em)').matches;
-        if (isPc && window.localStorage.getItem(key) !== todayString()) {
-          window.localStorage.setItem(key, todayString());
+        if (isAuthRef.current && isPc && window.localStorage.getItem(key) !== kstToday()) {
+          window.localStorage.setItem(key, kstToday());
           openCard();
           say('오늘 브리핑이에요! 🔊 누르면 읽어드려요', 4000);
         }
@@ -191,13 +164,12 @@ export default function TassJunior() {
   // 알림 모드가 되면 다음 소식을 말풍선으로
   useEffect(() => {
     if (mode !== 'alert') return;
-    if (!isAuthenticated) {
+    const lines = brief?.lines || [];
+    if (lines.length === 0) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      say(pick(['안녕하세요! 막내 TASS JR.예요', 'PIN을 넣으시면 오늘 할 일을 알려드려요']));
+      say(pick(['안녕하세요! 막내 TASS JR.예요', '저를 누르면 오늘 브리핑!']));
       return;
     }
-    const lines = brief?.lines || [];
-    if (lines.length === 0) return;
     say(lines[lineIdx.current % lines.length], 3400);
     lineIdx.current += 1;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -252,34 +224,91 @@ export default function TassJunior() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card]);
+  // ---- 목소리 (서버에서 남자 막내 목소리로 만든 음성. 미리 받아 두면 누르자마자 나온다) ----
+  function prepareVoice(b: Briefing): Promise<string | null> {
+    const key = briefingKey(b.speech);
+    if (voiceRef.current?.key === key) return Promise.resolve(voiceRef.current.url);
+    if (voiceJob.current?.key === key) return voiceJob.current.promise;
+    const promise = fetch(`/api/briefing/voice?k=${key}`)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        if (voiceRef.current) URL.revokeObjectURL(voiceRef.current.url);
+        voiceRef.current = { key, url };
+        return url;
+      })
+      .catch(() => null)
+      .finally(() => {
+        if (voiceJob.current?.key === key) voiceJob.current = null;
+      });
+    voiceJob.current = { key, promise };
+    return promise;
+  }
+
+  const stopVoice = () => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    setVoiceState('idle');
+  };
+
+  const playVoice = async () => {
+    if (!brief) return;
+    stopVoice();
+    setVoiceState('loading');
+    const url = await prepareVoice(brief);
+    if (!url) {
+      setVoiceState('idle');
+      speakFallback(brief.speech);
+      return;
+    }
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.onended = () => setVoiceState('idle');
+    audio.onerror = () => setVoiceState('idle');
+    try {
+      await audio.play();
+      setVoiceState('playing');
+    } catch {
+      setVoiceState('idle');
+    }
+  };
+
+  useEffect(
+    () => () => {
+      audioRef.current?.pause();
+      if (voiceRef.current) URL.revokeObjectURL(voiceRef.current.url);
+    },
+    []
+  );
+
   const closeCard = () => {
+    stopVoice();
     setCard(false);
     setPaused(false);
   };
 
+  // 누르면 PIN 없이 바로 브리핑 카드 + 바로 읽어 주기
   const onClick = () => {
     if (consumeDragClick()) return;
-    if (!isAuthenticated) {
-      say('PIN을 먼저 입력해 주세요!', 2500);
-      openAuthModal('/#jr');
+    if (card) {
+      closeCard();
       return;
     }
-    if (card) closeCard();
-    else openCard();
+    openCard();
+    void playVoice();
   };
 
+  // 다른 화면으로 넘어갈 때만 PIN (인증 후 그 화면으로 바로 이동)
   const go = (href: string) => {
     closeCard();
+    if (!isAuthenticated) {
+      say('PIN만 넣어주시면 바로 모셔다 드릴게요!', 2500);
+      openAuthModal(href);
+      return;
+    }
     say('바로 모셔다 드릴게요!', 1500);
     window.setTimeout(() => router.push(href), 400);
-  };
-
-  const readAloud = () => {
-    if (!brief) return;
-    const text = brief.rows.length
-      ? `오늘 브리핑입니다. ${brief.rows.map((r) => r.label).join('. ')}.`
-      : '오늘은 급한 일이 없어요.';
-    speakKo(text);
   };
 
   // 견적서 파일을 끌어다 놓으면 견적관리로 가져가기
@@ -326,7 +355,8 @@ export default function TassJunior() {
         onMouseEnter={() => {
           setHover(true);
           setPaused(true);
-          if (!card && !dragging) say(isAuthenticated ? '누르면 오늘 브리핑! (끌면 옮기기)' : '저는 알림 담당 막내예요!', 3000);
+          if (brief) void prepareVoice(brief);
+          if (!card && !dragging) say('누르면 오늘 브리핑! (끌면 옮기기)', 3000);
         }}
         onMouseLeave={() => {
           setHover(false);
@@ -343,7 +373,7 @@ export default function TassJunior() {
         <div ref={cardRef} className="jr-card">
           <div className="jr-card-head">
             <b>TASS JR. 오늘의 브리핑</b>
-            <span>{todayString().slice(5).replace('-', '/')}</span>
+            <span>{kstToday().slice(5).replace('-', '/')}</span>
           </div>
           {!brief ? (
             <div className="jr-card-empty">불러오는 중…</div>
@@ -362,7 +392,9 @@ export default function TassJunior() {
             ))
           )}
           <div className="jr-card-foot">
-            <button type="button" onClick={readAloud}>🔊 소리로 듣기</button>
+            <button type="button" onClick={() => (voiceState === 'idle' ? void playVoice() : stopVoice())}>
+              {voiceState === 'loading' ? '🔊 준비 중…' : voiceState === 'playing' ? '⏹ 그만 듣기' : '🔊 소리로 듣기'}
+            </button>
             <button type="button" onClick={closeCard}>닫기</button>
           </div>
           <div className="jr-card-tip">💡 견적서 PDF를 저에게 끌어다 놓으면 견적관리에 올려드려요</div>

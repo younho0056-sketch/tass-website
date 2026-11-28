@@ -73,7 +73,8 @@ export async function GET(request: Request) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: `장난기 많은 막내 후배 남자 직원처럼, 밝고 개구쟁이 같은 말투로 경쾌하게 읽어 줘: ${speech}` }] }],
+        // 말투 지시문을 붙이면 그 문장까지 소리 내어 읽어서, 읽을 대사만 보낸다 (밝은 목소리는 'Puck'으로)
+        contents: [{ parts: [{ text: speech }] }],
         generationConfig: {
           responseModalities: ['AUDIO'],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },

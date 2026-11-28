@@ -43,7 +43,7 @@ export function buildBriefing(orders: BriefOrder[], schedules: BriefSchedule[], 
 
   const rows: BriefRow[] = [];
   const lines: string[] = [];
-  const say: string[] = ['선배님! 막내 TASS JR. 오늘 브리핑 들어갑니다~'];
+  const say: string[] = ['오늘 브리핑 들어갑니다!'];
 
   if (today.length) {
     rows.push({ key: 'today', icon: '⏰', label: `오늘 납기 ${today.length}건`, detail: today.map((x) => x.o.itemName).slice(0, 2).join(', '), href: '/orders', urgent: true });

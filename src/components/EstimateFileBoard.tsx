@@ -13,6 +13,7 @@ import {
 } from '@tabler/icons-react';
 import { parseEstimateFile } from '@/lib/estimateParser';
 import { MAX_ESTIMATE_FILE_BYTES, PROCESS_STEPS, type EstimateFileItem } from '@/lib/estimateFiles';
+import { hasPendingEstimateFiles, takePendingEstimateFiles } from '@/lib/pendingUploads';
 
 type Props = {
   /** 탭·검색으로 걸러진 파일 */
@@ -131,6 +132,16 @@ export default function EstimateFileBoard({ files, totalCount, partnerNames, can
   useEffect(() => {
     handleFilesRef.current = handleFiles;
   });
+
+  // 홈 화면의 후임 로봇(TASS JR.)에게 떨어뜨린 견적서 → 거래처 목록을 불러올 시간을 조금 두고 바로 올리기 창으로
+  useEffect(() => {
+    if (!hasPendingEstimateFiles()) return;
+    const t = window.setTimeout(() => {
+      const files = takePendingEstimateFiles();
+      if (files.length > 0) handleFilesRef.current(files);
+    }, 1200);
+    return () => window.clearTimeout(t);
+  }, []);
   useEffect(() => {
     const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types || []).includes('Files');
     const onEnter = (e: DragEvent) => {

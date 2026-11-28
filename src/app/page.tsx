@@ -14,6 +14,7 @@ import PWAInstallButton from '@/components/PWAInstallButton';
 import TassAiAssistant from '@/components/TassAiAssistant';
 import AiAssistantButton from '@/components/AiAssistantButton';
 import TassRobot from '@/components/TassRobot';
+import TassJunior from '@/components/TassJunior';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -174,8 +175,9 @@ export default function LandingPage() {
         <TassAiAssistant hideTrigger />
       </div>
 
-      {/* PC: 화면 아래를 걸어 다니는 TASS 로봇 (누르면 AI 비서) */}
+      {/* PC: 화면 아래를 걸어 다니는 로봇들 — 선임 TASS(AI 비서) / 후임 TASS JR.(알림·브리핑) */}
       <TassRobot />
+      <TassJunior />
 
       {/* SECTION 1: Hero Section (메인 비주얼) */}
       <div 

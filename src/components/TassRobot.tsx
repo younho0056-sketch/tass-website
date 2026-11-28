@@ -2,20 +2,22 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { openTassAi } from '@/lib/tassAi';
+import { robotState, ROBOT_GREET_EVENT, ROBOT_WAKE_EVENT } from '@/lib/robotBus';
+import { useRobotWalker } from './useRobotWalker';
 
 /**
- * TASS 로봇 마스코트 — PC 홈 화면 아래쪽을 걸어 다니고, 졸기도 하고, 놀기도 한다.
- * 누르면 TASS AI 비서 창이 열린다.
+ * 선임 TASS 로봇 — PC 홈 화면 아래쪽을 걸어 다니고, 졸기도 하고, 놀기도 한다.
+ * 누르면 TASS AI 비서 창이 열리고, 끌면 원하는 곳(높이)으로 옮길 수 있다.
  */
 
 type Mode = 'walk' | 'idle' | 'doze' | 'play';
 
 const W = 64; // 로봇 폭(px)
+const H = 128;
 const SPEED = 38; // 걷는 속도(px/초)
-const EDGE = 24;
 
 const LINES: Record<'idle' | 'doze' | 'play', string[]> = {
-  idle: ['안녕하세요! 저는 TASS예요', '궁금한 건 저를 눌러 물어보세요', '오늘 납기 확인하셨나요?', '거래처 연락처도 찾아드려요'],
+  idle: ['안녕하세요! 저는 TASS예요', '궁금한 건 저를 눌러 물어보세요', '오늘 납기 확인하셨나요?', '거래처 연락처도 찾아드려요', '저를 끌어서 옮길 수도 있어요'],
   doze: ['zZ… 잠깐만 졸게요', '음냐… 5분만…'],
   play: ['신난다~ ♪', '빙글빙글!', '점프!'],
 };
@@ -23,16 +25,12 @@ const pick = (list: string[]) => list[Math.floor(Math.random() * list.length)];
 
 export default function TassRobot() {
   const [mode, setMode] = useState<Mode>('idle');
-  const [facing, setFacing] = useState<1 | -1>(1);
   const [bubble, setBubble] = useState<string | null>(null);
   const [hover, setHover] = useState(false);
   const [poked, setPoked] = useState(false);
+  const [landing, setLanding] = useState(false);
 
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const posRef = useRef(EDGE + 16);
-  const dirRef = useRef<1 | -1>(1);
   const modeRef = useRef<Mode>('idle');
-  const hoverRef = useRef(false);
   const bubbleTimer = useRef<number | undefined>(undefined);
 
   const say = (text: string, ms = 2600) => {
@@ -41,34 +39,27 @@ export default function TassRobot() {
     bubbleTimer.current = window.setTimeout(() => setBubble(null), ms);
   };
 
-  // 걷기: 매 프레임 위치만 옮긴다 (리렌더 없이 transform 변경)
-  useEffect(() => {
-    let raf = 0;
-    let last = performance.now();
-    if (wrapRef.current) wrapRef.current.style.transform = `translateX(${posRef.current}px)`;
-    const tick = (t: number) => {
-      const dt = Math.min(0.05, (t - last) / 1000);
-      last = t;
-      if (modeRef.current === 'walk' && !hoverRef.current && !document.hidden) {
-        const max = window.innerWidth - W - EDGE;
-        let x = posRef.current + dirRef.current * SPEED * dt;
-        if (x >= max) {
-          x = max;
-          dirRef.current = -1;
-          setFacing(-1);
-        } else if (x <= EDGE) {
-          x = EDGE;
-          dirRef.current = 1;
-          setFacing(1);
-        }
-        posRef.current = x;
-        if (wrapRef.current) wrapRef.current.style.transform = `translateX(${x}px)`;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  const walker = useRobotWalker({
+    name: 'senior',
+    width: W,
+    height: H,
+    speed: SPEED,
+    startX: () => 40,
+    onDragStart: () => say('으앗! 어디 가요?', 1500),
+    onDragEnd: () => {
+      setLanding(true);
+      window.setTimeout(() => setLanding(false), 450);
+      say('여기서 걸을게요!', 1800);
+    },
+  });
+  const { wrapRef, facing, dragging, dragHandlers, consumeDragClick, setWalking, setPaused, flip } = walker;
+
+  const changeMode = (m: Mode) => {
+    modeRef.current = m;
+    robotState.senior.mode = m;
+    setWalking(m === 'walk');
+    setMode(m);
+  };
 
   // 무엇을 할지 몇 초마다 정한다: 걷기 / 멈춰 쉬기 / 졸기 / 놀기
   useEffect(() => {
@@ -78,12 +69,8 @@ export default function TassRobot() {
     const next = () => {
       const r = Math.random();
       const m: Mode = r < 0.45 ? 'walk' : r < 0.63 ? 'idle' : r < 0.82 ? 'doze' : 'play';
-      if (m === 'walk' && Math.random() < 0.35) {
-        dirRef.current = dirRef.current === 1 ? -1 : 1;
-        setFacing(dirRef.current);
-      }
-      modeRef.current = m;
-      setMode(m);
+      if (m === 'walk' && Math.random() < 0.35) flip();
+      changeMode(m);
       if (m !== 'walk' && Math.random() < 0.6) say(pick(LINES[m]));
       const dur =
         m === 'walk' ? 5000 + Math.random() * 6000 : m === 'doze' ? 6500 + Math.random() * 5000 : m === 'play' ? 3300 : 2600 + Math.random() * 2400;
@@ -91,29 +78,52 @@ export default function TassRobot() {
     };
     timer = window.setTimeout(next, 1800);
     return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 후임이 인사하거나 깨우면 대답
+  useEffect(() => {
+    const onGreet = () => window.setTimeout(() => say(pick(['응~ 수고 많아!', '오, 막내 왔어?', '오늘도 파이팅!']), 2200), 900);
+    const onWake = () => {
+      if (modeRef.current === 'doze') {
+        changeMode('idle');
+        window.setTimeout(() => say('어! 안 잤어… 진짜야', 2400), 700);
+      } else {
+        window.setTimeout(() => say('나 안 졸았다~', 2000), 700);
+      }
+    };
+    window.addEventListener(ROBOT_GREET_EVENT, onGreet);
+    window.addEventListener(ROBOT_WAKE_EVENT, onWake);
+    return () => {
+      window.removeEventListener(ROBOT_GREET_EVENT, onGreet);
+      window.removeEventListener(ROBOT_WAKE_EVENT, onWake);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => () => window.clearTimeout(bubbleTimer.current), []);
 
   const onEnter = () => {
-    hoverRef.current = true;
+    setPaused(true);
     setHover(true);
-    say('저를 누르면 AI 비서가 열려요 💬', 4000);
+    if (!dragging) say('누르면 AI 비서, 끌면 옮기기 💬', 4000);
   };
   const onLeave = () => {
-    hoverRef.current = false;
+    setPaused(false);
     setHover(false);
   };
   const onClick = () => {
+    if (consumeDragClick()) return; // 끌어서 옮긴 경우
     setPoked(true);
     window.setTimeout(() => setPoked(false), 600);
     say('네! 무엇을 도와드릴까요?', 2200);
     openTassAi();
   };
 
-  const face: 'happy' | 'sleep' | 'normal' = hover || poked || mode === 'play' ? 'happy' : mode === 'doze' && !hover ? 'sleep' : 'normal';
+  const face: 'happy' | 'sleep' | 'normal' =
+    hover || poked || dragging || mode === 'play' ? 'happy' : mode === 'doze' ? 'sleep' : 'normal';
   const eyeShift = facing * 2;
-  const bodyClass = poked ? 'poke' : hover ? 'hover' : mode;
+  const bodyClass = dragging ? 'dragged' : landing ? 'landing' : poked ? 'poke' : hover ? 'hover' : mode;
 
   return (
     <div ref={wrapRef} className="tassbot-wrap">
@@ -131,6 +141,7 @@ export default function TassRobot() {
       <button
         type="button"
         className="tassbot-btn"
+        {...dragHandlers}
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}
         onFocus={onEnter}
@@ -228,7 +239,7 @@ const CSS = `
 .tassbot-wrap {
   position: fixed;
   left: 0;
-  bottom: 10px;
+  bottom: 72px;
   z-index: 140;
   width: ${W}px;
   will-change: transform;
@@ -236,7 +247,8 @@ const CSS = `
 @media (max-width: 48em) { .tassbot-wrap { display: none; } }
 .tassbot-btn {
   all: unset;
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
   display: block;
   position: relative;
   width: ${W}px;
@@ -290,6 +302,22 @@ const CSS = `
   82% { transform: rotate(368deg); }
   90% { transform: rotate(354deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* 끌려가는 중: 대롱대롱 / 놓으면 통통 착지 */
+.tassbot-btn:active { cursor: grabbing; }
+.tassbot-body.dragged { animation: tassbot-dangle 0.5s ease-in-out infinite; transform-origin: 50% 0%; }
+.tassbot-body.dragged .tassbot-foot.left { animation: tassbot-step 0.25s ease-in-out infinite; }
+.tassbot-body.dragged .tassbot-foot.right { animation: tassbot-step 0.25s ease-in-out infinite 0.12s; }
+@keyframes tassbot-dangle {
+  0%, 100% { transform: rotate(-7deg); }
+  50% { transform: rotate(7deg); }
+}
+.tassbot-body.landing { animation: tassbot-land 0.45s ease-out 1; }
+@keyframes tassbot-land {
+  0% { transform: scale(1.08, 0.86); }
+  45% { transform: translateY(-8px) scale(0.96, 1.05); }
+  100% { transform: translateY(0) scale(1); }
 }
 
 /* 마우스 올리면 반가워하기 / 누르면 깡총 */
